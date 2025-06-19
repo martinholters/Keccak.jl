@@ -1,0 +1,10 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+Keccak = "46f8cb0c-4e3a-418e-8a08-140a605d534d"
+SIMD = "fdea26ae-647d-5447-a871-4b548cad5224"
+
+[sources]
+Keccak = {path = ".."}
+
+[compat]
+Documenter = "1.12.0"

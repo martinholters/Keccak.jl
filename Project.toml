@@ -1,0 +1,11 @@
+name = "Keccak"
+uuid = "46f8cb0c-4e3a-418e-8a08-140a605d534d"
+version = "0.1.0"
+authors = ["Martin Holters <martin.holters@hsu-hh.de>"]
+
+[deps]
+SIMD = "fdea26ae-647d-5447-a871-4b548cad5224"
+
+[compat]
+SIMD = "3.7.1"
+julia = "1.10"
