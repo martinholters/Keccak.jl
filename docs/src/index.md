@@ -1,11 +1,18 @@
 # Keccak.jl Documentation
 
 ```@docs
+absorb
+squeeze
 keccak_p
 ```
 
 ## Internals
-### Helpers
+### Sponge
+```@docs
+Keccak.Sponge
+```
+
+### Kᴇᴄᴄᴀᴋ Helpers
 ```@docs
 Keccak.ℓ
 Keccak.rc

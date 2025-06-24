@@ -1,7 +1,133 @@
 using Keccak
 using OffsetArrays: Origin
 using SIMD: Vec
-using Test: @test, @testset
+using Test: @test, @test_throws, @testset
+
+@testset "Sponge" begin
+    @testset "identity sponge" for (maybe_tup, maybe_val) in ((identity, identity), (Tuple, Val))
+        sponge = Keccak.Sponge{typeof(identity),3,NTuple{7,UInt16}}(identity, Tuple(zeros(UInt16,7)), 0)
+        sponge = Keccak.absorb(sponge, maybe_tup([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]))
+        @test sponge.state == (0x0201, 0x0403, 0x0605, 0x0000, 0x0000, 0x0000, 0x0000)
+        sponge = Keccak.absorb(sponge, maybe_tup([0x07, 0x08, 0x09]))
+        @test sponge.state == (
+            0x0201 ⊻ 0x0807, 0x0403 ⊻ 0x0009, 0x0605,
+            0x0000, 0x0000, 0x0000, 0x0000
+        )
+        sponge = Keccak.absorb(sponge, maybe_tup([0x0a, 0x0b, 0x0c, 0x0d]))
+        @test sponge.state == (
+            0x0201 ⊻ 0x0807 ⊻ 0x000d, 0x0403 ⊻ 0x0a09, 0x0605 ⊻ 0x0c0b,
+            0x0000, 0x0000, 0x0000, 0x0000
+        )
+        sponge = Keccak.absorb(sponge, maybe_tup(zeros(UInt8, 5)))
+        ref_output = [0x01 ⊻ 0x07 ⊻ 0x0d, 0x02 ⊻ 0x08, 0x03 ⊻ 0x09, 0x04 ⊻ 0x0a, 0x05 ⊻ 0x0b, 0x06 ⊻ 0x0c]
+        i = 1
+        for l in 0:20
+            sponge, output = Keccak.squeeze(sponge, maybe_val(l))
+            @test length(output) == l
+            for j in 1:l
+                @test output[j] == ref_output[i]
+                i = mod1(i+1, 6)
+            end
+        end
+    end
+    @testset "rot sponge" for (maybe_tup, maybe_val) in ((identity, identity), (Tuple, Val))
+        f(state) = (state[end], state[1:end-1]...)
+        sponge = Keccak.Sponge{typeof(f),3,NTuple{7,UInt16}}(f, Tuple(zeros(UInt16,7)), 0)
+        sponge = Keccak.absorb(sponge, maybe_tup([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]))
+        @test sponge.state == (0x0000, 0x0201, 0x0403, 0x0605, 0x0000, 0x0000, 0x0000)
+        sponge = Keccak.absorb(sponge, maybe_tup([0x07, 0x08, 0x09]))
+        @test sponge.state == (
+            0x0807, 0x0201 ⊻ 0x0009, 0x0403,
+            0x0605, 0x0000, 0x0000, 0x0000
+        )
+        sponge = Keccak.absorb(sponge, maybe_tup([0x0a, 0x0b, 0x0c, 0x0d]))
+        @test sponge.state == (
+            0x000d, 0x0807, 0x0201 ⊻ 0x0a09, 0x0403 ⊻ 0x0c0b,
+            0x0605, 0x0000, 0x0000
+        )
+        sponge = Keccak.absorb(sponge, maybe_tup(zeros(UInt8, 5)))
+        ref_output = [
+            0x00, 0x00, 0x0d, 0x00, 0x07, 0x08, 0x01 ⊻ 0x09, 0x02 ⊻ 0x0a,
+            0x03 ⊻ 0x0b, 0x04 ⊻ 0x0c, 0x05, 0x06, 0x00, 0x00
+        ]
+        i = 1
+        for l in 0:20
+            sponge, output = Keccak.squeeze(sponge, maybe_val(l))
+            @test length(output) == l
+            for j in 1:l
+                @test output[j] == ref_output[i]
+                i = mod1(i+1, 6)
+                if i == 1
+                    circshift!(ref_output, 2)
+                end
+            end
+        end
+    end
+
+    @testset "$N-fold SIMD rot sponge" for N in (1,2,4)
+        # compare an N-SIMD sponge to N scalar sponges on random data
+        f(state) = (state[end], state[1:end-1]...)
+        ref_sponges = [Keccak.Sponge{typeof(f),3,NTuple{7,UInt16}}(f, Tuple(zeros(UInt16,7)), 0) for _ in 1:N]
+        simd_sponge = Keccak.Sponge{typeof(f),3,NTuple{7,Vec{N,UInt16}}}(f, Tuple(zeros(Vec{N,UInt16},7)), 0)
+        for _ in 1:100
+            # single (same) message for all N instances
+            len = rand(0:8)
+            msg = rand(UInt8, len)
+            if rand(Bool)
+                msg = Tuple(msg)
+            end
+            ref_sponges = map(sponge -> Keccak.absorb(sponge, msg), ref_sponges)
+            simd_sponge = Keccak.absorb(simd_sponge, msg)
+            for n in 1:N
+                @test map(v -> v[n], simd_sponge.state) == ref_sponges[n].state
+            end
+        end
+        for _ in 1:100
+            # different message per instance
+            len = rand(0:8)
+            msgs = [rand(UInt8, len) for _ in 1:N]
+            if rand(Bool)
+                msgs = Tuple.(msgs)
+            end
+            ref_sponges = map((sponge, msg) -> Keccak.absorb(sponge, msg), ref_sponges, msgs)
+            simd_sponge = Keccak.absorb(simd_sponge, msgs...)
+            for n in 1:N
+                @test map(v -> v[n], simd_sponge.state) == ref_sponges[n].state
+            end
+        end
+        if N > 1
+            @test_throws DimensionMismatch Keccak.absorb(simd_sponge, [rand(UInt8, len) for len in 1:N]...)
+        end
+        # padding
+        len = 6 - simd_sponge.k
+        msgs = [zeros(UInt8, len) for _ in 1:N]
+        if rand(Bool)
+            msgs = Tuple.(msgs)
+        end
+        ref_sponges = map((sponge, msg) -> Keccak.absorb(sponge, msg), ref_sponges, msgs)
+        simd_sponge = Keccak.absorb(simd_sponge, msgs...)
+        for n in 1:N
+            @test map(v -> v[n], simd_sponge.state) == ref_sponges[n].state
+        end
+        # verify squeezed output
+        for _ in 1:100
+            len = rand(0:20)
+            simd_sponge, simd_data = Keccak.squeeze(simd_sponge, len)
+            for n in 1:N
+                ref_sponges[n], ref_data = Keccak.squeeze(ref_sponges[n], len)
+                @test simd_data[n] == ref_data
+            end
+        end
+        for _ in 1:100
+            len = rand(0:20)
+            simd_sponge, simd_data = Keccak.squeeze(simd_sponge, Val(len))
+            for n in 1:N
+                ref_sponges[n], ref_data = Keccak.squeeze(ref_sponges[n], Val(len))
+                @test simd_data[n] == ref_data
+            end
+        end
+    end
+end
 
 @testset "LFSR rc" begin
     @test Keccak.rc(0) == true

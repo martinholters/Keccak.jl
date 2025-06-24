@@ -7,8 +7,9 @@ end
 
 using SIMD: Vec
 
-export keccak_p
+export absorb, keccak_p, squeeze
 
+include("sponge.jl")
 include("keccakp.jl")
 
 end # module Keccak
