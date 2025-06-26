@@ -4,6 +4,8 @@
 absorb
 squeeze
 keccak_p
+KeccakP
+KeccakSponge
 ```
 
 ## Internals

@@ -243,3 +243,57 @@ function keccak_p(state::NTuple{25,T}, ::Val{nrounds}=Val(12+2ℓ(T))) where {T,
     end
     return state
 end
+
+"""
+    KeccakP{nrounds}
+
+Convenience wrapper for `keccak_p` with `nrounds` fixed.
+
+This allows replacing constructions like `state -> keccak_p(state, Val(nrounds))`
+with `KeccakP{nrounds}()`:
+```jldoctest; setup=:(using Keccak; state=Tuple(zeros(UInt64,25)))
+julia> const f1 = KeccakP{23}()
+KeccakP{23}()
+
+julia> const f2 = state -> keccak_p(state, Val(23))
+#2 (generic function with 1 method)
+
+julia> f1(state) == f2(state) == keccak_p(state, Val(23)) # for suitable state
+true
+```
+"""
+struct KeccakP{nrounds} end
+(::KeccakP{nrounds})(state::NTuple{25}) where {nrounds} = keccak_p(state, Val(nrounds))
+
+"""
+    KeccakSponge{R,T,nrounds}
+
+A `Sponge` specialization for Kᴇᴄᴄᴀᴋ:
+- The permutation function is `KeccakP{nrounds}`.
+- The sponge contents are a 25-tuple of `T`, which must be an unsigned integer or a
+  `SIMD.Vec` thereof.
+- The rate in bits is given by `8*sizeof(T)*R` (or `8*sizeof(eltype(T))*R)` if
+  `T<:SIMD.Vec`).
+"""
+const KeccakSponge{R,T<:Union{Unsigned,<:Vec{<:Any,<:Unsigned}},nrounds} =
+    Sponge{KeccakP{nrounds},R,NTuple{25,T}}
+
+"""
+    KeccakSponge{R,T,nrounds}()
+
+Return a zero-initialized `KeccakSponge{R,T,nrounds}`.
+"""
+function KeccakSponge{R,T,nrounds}() where {R,T,nrounds}
+    Sponge{KeccakP{nrounds},R,NTuple{25,T}}(
+        KeccakP{nrounds}(),
+        ntuple(_ -> zero(T), Val(25)),
+        0,
+    )
+end
+
+"""
+    KeccakSponge{R,T}()
+
+Return a zero-initialized `KeccakSponge{R,T,nrounds}` with the default `nrounds=12+2ℓ(T)`.
+"""
+KeccakSponge{R,T}() where {R,T} = KeccakSponge{R,T,12+2ℓ(T)}()
