@@ -92,7 +92,7 @@ function absorb(
 ) where {R,K,ELT<:Unsigned,T<:Union{ELT,Vec{<:Any,ELT}}}
     st = sponge.state
     k = sponge.k
-    n = firstindex(data)
+    n = 0
     if k != 0
         block = reinterpret(NTuple{R,ELT}, copy_subchunk(data, 0, k, Val(rate(sponge))))
         st = let st=st, block=block
@@ -106,8 +106,8 @@ function absorb(
             k = 0
         end
     end
-    while n + rate(sponge) - 1 <= lastindex(data)
-        block = copy_chunk(data, n-1, ELT, Val(R))
+    while n + rate(sponge) <= length(data)
+        block = copy_chunk(data, n, ELT, Val(R))
         st = let st=st, block=block
             ntuple(l -> l <= R ? st[l] ⊻ block[l] : st[l], Val(K))
         end
@@ -115,12 +115,12 @@ function absorb(
         n += Δn
         st = sponge.transform(st)
     end
-    if n <= lastindex(data)
-        block = reinterpret(NTuple{R,ELT}, copy_subchunk(data, n-1, 0, Val(rate(sponge))))
+    if n < length(data)
+        block = reinterpret(NTuple{R,ELT}, copy_subchunk(data, n, 0, Val(rate(sponge))))
         st = let st=st, block=block
             ntuple(l -> l <= R ? st[l] ⊻ block[l] : st[l], Val(K))
         end
-        Δn = lastindex(data)-n+1
+        Δn = length(data)-n
         k += Δn
     end
     return update(sponge, st, k)
@@ -147,7 +147,7 @@ function absorb(
     end
     st = sponge.state
     k = sponge.k
-    n = firstindex(data[1])
+    n = 0
     if k != 0
         blocks = let k=k
             reinterpret(
@@ -166,8 +166,8 @@ function absorb(
             k = 0
         end
     end
-    while n + rate(sponge) - 1 <= lastindex(data[1])
-        blocks = let n=n; map(@inline(d -> copy_chunk(d, n-1, ELT, Val(R))), data); end
+    while n + rate(sponge) <= length(data[1])
+        blocks = let n=n; map(@inline(d -> copy_chunk(d, n, ELT, Val(R))), data); end
         st = let st=st, blocks=blocks
             ntuple(l -> l <= R ? st[l] ⊻ Vec{N,ELT}(map(b->b[l], blocks)) : st[l], Val(K))
         end
@@ -175,17 +175,17 @@ function absorb(
         n += Δn
         st = sponge.transform(st)
     end
-    if n <= lastindex(data[1])
+    if n < length(data[1])
         blocks = let n=n
             reinterpret(
                 NTuple{N,NTuple{R,ELT}},
-                map(@inline(d -> copy_subchunk(d, n-1, 0, Val(rate(sponge)))), data)
+                map(@inline(d -> copy_subchunk(d, n, 0, Val(rate(sponge)))), data)
             )
         end
         st = let st=st, blocks=blocks
             ntuple(l -> l <= R ? st[l] ⊻ Vec{N,ELT}(map(b->b[l], blocks)) : st[l], Val(K))
         end
-        Δn = lastindex(data[1])-n+1
+        Δn = lastindex(data[1])-n
         k += Δn
     end
     return update(sponge, st, k)
