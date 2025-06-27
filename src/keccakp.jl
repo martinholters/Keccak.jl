@@ -276,7 +276,7 @@ A `Sponge` specialization for Kᴇᴄᴄᴀᴋ:
   `T<:SIMD.Vec`).
 """
 const KeccakSponge{R,T<:Union{Unsigned,<:Vec{<:Any,<:Unsigned}},nrounds} =
-    Sponge{KeccakP{nrounds},R,NTuple{25,T}}
+    Sponge{R,NTuple{25,T},KeccakP{nrounds}}
 
 """
     KeccakSponge{R,T,nrounds}()
@@ -284,7 +284,7 @@ const KeccakSponge{R,T<:Union{Unsigned,<:Vec{<:Any,<:Unsigned}},nrounds} =
 Return a zero-initialized `KeccakSponge{R,T,nrounds}`.
 """
 function KeccakSponge{R,T,nrounds}() where {R,T,nrounds}
-    Sponge{KeccakP{nrounds},R,NTuple{25,T}}(
+    Sponge{R}(
         KeccakP{nrounds}(),
         ntuple(_ -> zero(T), Val(25)),
         0,

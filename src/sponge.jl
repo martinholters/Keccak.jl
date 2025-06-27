@@ -1,5 +1,5 @@
 """
-    Sponge{F,R,T<:NTuple}
+    Sponge{R,T<:NTuple,Fxfm}
 
 Cryptographic sponge holding a fixed-length permutation function, state of that length,
 and an offset for byte-wise input and output.
@@ -10,9 +10,9 @@ immutable; any operations updating it return an updated `Sponge` instead of muta
 given one.
 
 # Type parameters
-* `F`: type of the permutation function
 * `T`: type of the `NTuple` holding the sponge contents
 * `R`: the rate in units of the state elements (`eltype(T)`)
+* `Fxfm`: type of the permutation function
 
 # Fields
 * `transform`: the permutation function invoked for every rate bytes absorbed or squeezed.
@@ -25,11 +25,13 @@ If `T<:SIMD.Vec` (i.e. the state tuple holds `SIMD.Vec`s), absorbing and squeezi
 the individual data paths separately (and the rate in bytes is given by
 `R*sizeof(eltype(eltype(T)))`) in this case.)
 """
-struct Sponge{F,R,T<:NTuple}
-    transform::F
+struct Sponge{R,T<:NTuple,Fxfm}
+    transform::Fxfm
     state::T
     k::Int
 end
+Sponge{R}(transform::Fxfm, state::T, k) where {R,T,Fxfm} =
+    Sponge{R,T,Fxfm}(transform, state, k)
 
 # Return a tuple `out` of length `blocklen`, such that
 # `out[destoffset+1:blocklen] == data[1+srcoffset:blocklen-destoffset+srcoffset]`
@@ -69,9 +71,9 @@ However, before the first `squeeze`, appropriate padding should be performed.
 If the sponge holds `SIMD.Vec`s, the same `data` is used for every data path.
 """
 function absorb(
-    sponge::Sponge{F,R,NTuple{K,T}},
+    sponge::Sponge{R,NTuple{K,T}},
     data::Union{AbstractVector{UInt8},NTuple{<:Any,UInt8}}
-) where {F,R,K,ELT<:Unsigned,T<:Union{ELT,Vec{<:Any,ELT}}}
+) where {R,K,ELT<:Unsigned,T<:Union{ELT,Vec{<:Any,ELT}}}
     J = sizeof(ELT)
     st = sponge.state
     k = sponge.k
@@ -106,7 +108,7 @@ function absorb(
         Δn = lastindex(data)-n+1
         k += Δn
     end
-    return Sponge{F,R,NTuple{K,T}}(sponge.transform, st, k)
+    return Sponge{R}(sponge.transform, st, k)
 end
 
 """
@@ -122,9 +124,9 @@ However, before the first `squeeze`, appropriate padding should be performed.
 
 """
 function absorb(
-    sponge::Sponge{F,R,NTuple{K,T}},
+    sponge::Sponge{R,NTuple{K,T}},
     data::Vararg{Union{AbstractVector{UInt8},NTuple{<:Any,UInt8}},N}
-) where {F,R,K,N,ELT<:Unsigned,T<:Vec{N,ELT}}
+) where {R,K,N,ELT<:Unsigned,T<:Vec{N,ELT}}
     if !allequal(map(length, data))
         throw(DimensionMismatch("data arguments provided to `absorb` have different length"))
     end
@@ -172,23 +174,23 @@ function absorb(
         Δn = lastindex(data[1])-n+1
         k += Δn
     end
-    return Sponge{F,R,NTuple{K,T}}(sponge.transform, st, k)
+    return Sponge{R}(sponge.transform, st, k)
 end
 
 # prevent ambiguity and solve be reinterpreting `Vec{1,T}` as `T`
 function absorb(
-    sponge::Sponge{F,R,NTuple{K,T}},
+    sponge::Sponge{R,NTuple{K,T}},
     data::Union{AbstractVector{UInt8},NTuple{<:Any,UInt8}}
-) where {F,R,K,ELT<:Unsigned,T<:Vec{1,ELT}}
+) where {R,K,ELT<:Unsigned,T<:Vec{1,ELT}}
     sponge′ = @inline absorb(
-        Sponge{F,R,NTuple{K,ELT}}(
+        Sponge{R}(
             sponge.transform,
             reinterpret(NTuple{K,ELT}, sponge.state),
             sponge.k,
         ),
         data,
     )
-    return Sponge{F,R,NTuple{K,T}}(
+    return Sponge{R}(
         sponge′.transform,
         reinterpret(NTuple{K,T}, sponge′.state),
         sponge′.k,
@@ -207,7 +209,7 @@ squeezed form the respective data paths.
 """
 function squeeze end
 
-function squeeze(sponge::Sponge{F,R,NTuple{K,T}}, len) where {F,R,K,T<:Unsigned}
+function squeeze(sponge::Sponge{R,NTuple{K,T}}, len) where {R,K,T<:Unsigned}
     J = sizeof(T)
     data = Memory{UInt8}(undef, len)
     k = sponge.k
@@ -223,13 +225,13 @@ function squeeze(sponge::Sponge{F,R,NTuple{K,T}}, len) where {F,R,K,T<:Unsigned}
             k = 0
         end
     end
-    return Sponge{F,R,NTuple{K,T}}(sponge.transform, st, k), data
+    return Sponge{R}(sponge.transform, st, k), data
 end
 
 function squeeze(
-    sponge::Sponge{F,R,NTuple{K,T}},
+    sponge::Sponge{R,NTuple{K,T}},
     len,
-) where {F,R,K,N,ELT<:Unsigned,T<:Vec{N,ELT}}
+) where {R,K,N,ELT<:Unsigned,T<:Vec{N,ELT}}
     J = sizeof(ELT)
     data = ntuple(_ -> Memory{UInt8}(undef, len), Val(N))
     k = sponge.k
@@ -250,10 +252,10 @@ function squeeze(
             k = 0
         end
     end
-    return Sponge{F,R,NTuple{K,T}}(sponge.transform, st, k), data
+    return Sponge{R}(sponge.transform, st, k), data
 end
 
-function squeeze(sponge::Sponge{F,R,NTuple{K,T}}, ::Val{len}) where {F,R,K,T<:Unsigned,len}
+function squeeze(sponge::Sponge{R,NTuple{K,T}}, ::Val{len}) where {R,K,T<:Unsigned,len}
     J = sizeof(T)
     k = sponge.k
     st = sponge.state
@@ -266,7 +268,7 @@ function squeeze(sponge::Sponge{F,R,NTuple{K,T}}, ::Val{len}) where {F,R,K,T<:Un
             st = sponge.transform(st)
             k = 0
         end
-        return Sponge{F,R,NTuple{K,T}}(sponge.transform, st, k), data
+        return Sponge{R}(sponge.transform, st, k), data
     elseif len+k <= 2*J*R
         st′ = sponge.transform(st)
         data = let k=k, st1=reinterpret(NTuple{J*K,UInt8}, st),
@@ -278,7 +280,7 @@ function squeeze(sponge::Sponge{F,R,NTuple{K,T}}, ::Val{len}) where {F,R,K,T<:Un
             st′ = sponge.transform(st′)
             k = 0
         end
-        return Sponge{F,R,NTuple{K,T}}(sponge.transform, st′, k), data
+        return Sponge{R}(sponge.transform, st′, k), data
     else
         sponge, data′ = squeeze(sponge, len)
         return sponge, ntuple(i -> data′[i], Val(len))
@@ -286,9 +288,9 @@ function squeeze(sponge::Sponge{F,R,NTuple{K,T}}, ::Val{len}) where {F,R,K,T<:Un
 end
 
 function squeeze(
-    sponge::Sponge{F,R,NTuple{K,T}},
+    sponge::Sponge{R,NTuple{K,T}},
     ::Val{len}
-) where {F,R,K,N,ELT<:Unsigned,T<:Vec{N,ELT},len}
+) where {R,K,N,ELT<:Unsigned,T<:Vec{N,ELT},len}
     J = sizeof(ELT)
     k = sponge.k
     st = sponge.state
@@ -308,7 +310,7 @@ function squeeze(
             st = sponge.transform(st)
             k = 0
         end
-        return Sponge{F,R,NTuple{K,T}}(sponge.transform, st, k), data
+        return Sponge{R}(sponge.transform, st, k), data
     elseif len+k <= 2*J*R
         states = let st=st
             ntuple(@inline(n -> ntuple(i -> st[i][n], Val(R))), Val(N))
@@ -331,7 +333,7 @@ function squeeze(
             st′ = sponge.transform(st′)
             k = 0
         end
-        return Sponge{F,R,NTuple{K,T}}(sponge.transform, st′, k), data
+        return Sponge{R}(sponge.transform, st′, k), data
     else
         sponge, data′ = squeeze(sponge, len)
         return sponge, ntuple(n -> ntuple(i -> data′[n][i], Val(len)), Val(N))

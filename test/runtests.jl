@@ -5,7 +5,7 @@ using Test: @test, @test_throws, @testset
 
 @testset "Sponge" begin
     @testset "identity sponge" for (maybe_tup, maybe_val) in ((identity, identity), (Tuple, Val))
-        sponge = Keccak.Sponge{typeof(identity),3,NTuple{7,UInt16}}(identity, Tuple(zeros(UInt16,7)), 0)
+        sponge = Keccak.Sponge{3}(identity, Tuple(zeros(UInt16,7)), 0)
         sponge = Keccak.absorb(sponge, maybe_tup([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]))
         @test sponge.state == (0x0201, 0x0403, 0x0605, 0x0000, 0x0000, 0x0000, 0x0000)
         sponge = Keccak.absorb(sponge, maybe_tup([0x07, 0x08, 0x09]))
@@ -32,7 +32,7 @@ using Test: @test, @test_throws, @testset
     end
     @testset "rot sponge" for (maybe_tup, maybe_val) in ((identity, identity), (Tuple, Val))
         f(state) = (state[end], state[1:end-1]...)
-        sponge = Keccak.Sponge{typeof(f),3,NTuple{7,UInt16}}(f, Tuple(zeros(UInt16,7)), 0)
+        sponge = Keccak.Sponge{3}(f, Tuple(zeros(UInt16,7)), 0)
         sponge = Keccak.absorb(sponge, maybe_tup([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]))
         @test sponge.state == (0x0000, 0x0201, 0x0403, 0x0605, 0x0000, 0x0000, 0x0000)
         sponge = Keccak.absorb(sponge, maybe_tup([0x07, 0x08, 0x09]))
@@ -67,8 +67,8 @@ using Test: @test, @test_throws, @testset
     @testset "$N-fold SIMD rot sponge" for N in (1,2,4)
         # compare an N-SIMD sponge to N scalar sponges on random data
         f(state) = (state[end], state[1:end-1]...)
-        ref_sponges = [Keccak.Sponge{typeof(f),3,NTuple{7,UInt16}}(f, Tuple(zeros(UInt16,7)), 0) for _ in 1:N]
-        simd_sponge = Keccak.Sponge{typeof(f),3,NTuple{7,Vec{N,UInt16}}}(f, Tuple(zeros(Vec{N,UInt16},7)), 0)
+        ref_sponges = [Keccak.Sponge{3}(f, Tuple(zeros(UInt16,7)), 0) for _ in 1:N]
+        simd_sponge = Keccak.Sponge{3}(f, Tuple(zeros(Vec{N,UInt16},7)), 0)
         for _ in 1:100
             # single (same) message for all N instances
             len = rand(0:8)
