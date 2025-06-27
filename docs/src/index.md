@@ -12,6 +12,8 @@ KeccakSponge
 ### Sponge
 ```@docs
 Keccak.Sponge
+Keccak.update
+Keccak.rate
 ```
 
 ### Kᴇᴄᴄᴀᴋ Helpers

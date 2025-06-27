@@ -33,6 +33,22 @@ end
 Sponge{R}(transform::Fxfm, state::T, k) where {R,T,Fxfm} =
     Sponge{R,T,Fxfm}(transform, state, k)
 
+"""
+    update(sponge::Sponge, state, k)
+
+Return a new `Sponge` of the same type as `sponge` with the same `transform` function, but
+with `state` and `k` replaced with the given values.
+"""
+update(sponge::S, state::T, k) where {R,T,S<:Sponge{R,T}} = S(sponge.transform, state, k)
+
+"""
+    rate(sponge::Sponge)
+
+Returns the rate (in bytes) of the given `sponge`.
+"""
+rate(::Sponge{R,NTuple{K,T}}) where {R,K,ELT<:Unsigned,T<:Union{ELT,Vec{<:Any,ELT}}} =
+    R * sizeof(ELT)
+
 # Return a tuple `out` of length `blocklen`, such that
 # `out[destoffset+1:blocklen] == data[1+srcoffset:blocklen-destoffset+srcoffset]`
 # for indices within `data` and `0x00` outside
@@ -74,41 +90,40 @@ function absorb(
     sponge::Sponge{R,NTuple{K,T}},
     data::Union{AbstractVector{UInt8},NTuple{<:Any,UInt8}}
 ) where {R,K,ELT<:Unsigned,T<:Union{ELT,Vec{<:Any,ELT}}}
-    J = sizeof(ELT)
     st = sponge.state
     k = sponge.k
     n = firstindex(data)
     if k != 0
-        block = reinterpret(NTuple{R,ELT}, copy_subchunk(data, 0, k, Val(J*R)))
+        block = reinterpret(NTuple{R,ELT}, copy_subchunk(data, 0, k, Val(rate(sponge))))
         st = let st=st, block=block
             ntuple(l -> l <= R ? st[l] ⊻ block[l] : st[l], Val(K))
         end
-        Δn = min(length(data), J*R-k)
+        Δn = min(length(data), rate(sponge)-k)
         n += Δn
         k += Δn
-        if k == J*R
+        if k == rate(sponge)
             st = sponge.transform(st)
             k = 0
         end
     end
-    while n + J*R - 1 <= lastindex(data)
+    while n + rate(sponge) - 1 <= lastindex(data)
         block = copy_chunk(data, n-1, ELT, Val(R))
         st = let st=st, block=block
             ntuple(l -> l <= R ? st[l] ⊻ block[l] : st[l], Val(K))
         end
-        Δn = J*R
+        Δn = rate(sponge)
         n += Δn
         st = sponge.transform(st)
     end
     if n <= lastindex(data)
-        block = reinterpret(NTuple{R,ELT}, copy_subchunk(data, n-1, 0, Val(J*R)))
+        block = reinterpret(NTuple{R,ELT}, copy_subchunk(data, n-1, 0, Val(rate(sponge))))
         st = let st=st, block=block
             ntuple(l -> l <= R ? st[l] ⊻ block[l] : st[l], Val(K))
         end
         Δn = lastindex(data)-n+1
         k += Δn
     end
-    return Sponge{R}(sponge.transform, st, k)
+    return update(sponge, st, k)
 end
 
 """
@@ -130,7 +145,6 @@ function absorb(
     if !allequal(map(length, data))
         throw(DimensionMismatch("data arguments provided to `absorb` have different length"))
     end
-    J = sizeof(ELT)
     st = sponge.state
     k = sponge.k
     n = firstindex(data[1])
@@ -138,26 +152,26 @@ function absorb(
         blocks = let k=k
             reinterpret(
                 NTuple{N,NTuple{R,ELT}},
-                map(@inline(d -> copy_subchunk(d, 0, k, Val(J*R))), data),
+                map(@inline(d -> copy_subchunk(d, 0, k, Val(rate(sponge)))), data),
             )
         end
         st = let st=st, blocks=blocks
             ntuple(l -> l <= R ? st[l] ⊻ Vec{N,ELT}(map(b->b[l], blocks)) : st[l], Val(K))
         end
-        Δn = min(length(data[1]), J*R-k)
+        Δn = min(length(data[1]), rate(sponge)-k)
         n += Δn
         k += Δn
-        if k == J*R
+        if k == rate(sponge)
             st = sponge.transform(st)
             k = 0
         end
     end
-    while n + J*R - 1 <= lastindex(data[1])
+    while n + rate(sponge) - 1 <= lastindex(data[1])
         blocks = let n=n; map(@inline(d -> copy_chunk(d, n-1, ELT, Val(R))), data); end
         st = let st=st, blocks=blocks
             ntuple(l -> l <= R ? st[l] ⊻ Vec{N,ELT}(map(b->b[l], blocks)) : st[l], Val(K))
         end
-        Δn = J*R
+        Δn = rate(sponge)
         n += Δn
         st = sponge.transform(st)
     end
@@ -165,7 +179,7 @@ function absorb(
         blocks = let n=n
             reinterpret(
                 NTuple{N,NTuple{R,ELT}},
-                map(@inline(d -> copy_subchunk(d, n-1, 0, Val(J*R))), data)
+                map(@inline(d -> copy_subchunk(d, n-1, 0, Val(rate(sponge)))), data)
             )
         end
         st = let st=st, blocks=blocks
@@ -174,7 +188,7 @@ function absorb(
         Δn = lastindex(data[1])-n+1
         k += Δn
     end
-    return Sponge{R}(sponge.transform, st, k)
+    return update(sponge, st, k)
 end
 
 # prevent ambiguity and solve be reinterpreting `Vec{1,T}` as `T`
@@ -216,71 +230,70 @@ function squeeze(sponge::Sponge{R,NTuple{K,T}}, len) where {R,K,T<:Unsigned}
     st = sponge.state
     n = 1
     while n <= len
-        curlen = min(len-n+1, J*R-k)
+        curlen = min(len-n+1, rate(sponge)-k)
         copyto!(data, n, reinterpret(NTuple{J*K,UInt8}, st), k+1, curlen)
         k += curlen
         n += curlen
-        if k == J*R
+        if k == rate(sponge)
             st = sponge.transform(st)
             k = 0
         end
     end
-    return Sponge{R}(sponge.transform, st, k), data
+    return update(sponge, st, k), data
 end
 
 function squeeze(
     sponge::Sponge{R,NTuple{K,T}},
     len,
 ) where {R,K,N,ELT<:Unsigned,T<:Vec{N,ELT}}
-    J = sizeof(ELT)
     data = ntuple(_ -> Memory{UInt8}(undef, len), Val(N))
     k = sponge.k
     st = sponge.state
     n = 1
     while n <= len
-        curlen = min(len-n+1, J*R-k)
+        curlen = min(len-n+1, rate(sponge)-k)
         for i in 1:N
             sti = let i=i, st=st
                 ntuple(j -> st[j][i], Val(R))
             end
-            copyto!(data[i], n, reinterpret(NTuple{J*R,UInt8}, sti), k+1, curlen)
+            copyto!(data[i], n, reinterpret(NTuple{rate(sponge),UInt8}, sti), k+1, curlen)
         end
         k += curlen
         n += curlen
-        if k == J*R
+        if k == rate(sponge)
             st = sponge.transform(st)
             k = 0
         end
     end
-    return Sponge{R}(sponge.transform, st, k), data
+    return update(sponge, st, k), data
 end
 
 function squeeze(sponge::Sponge{R,NTuple{K,T}}, ::Val{len}) where {R,K,T<:Unsigned,len}
     J = sizeof(T)
     k = sponge.k
     st = sponge.state
-    if len+k <= J*R
+    if len+k <= rate(sponge)
         data = let k=k, st=reinterpret(NTuple{J*K,UInt8}, st)
             ntuple(i -> st[i+k], Val(len))
         end
         k += len
-        if k == J*R
+        if k == rate(sponge)
             st = sponge.transform(st)
             k = 0
         end
-        return Sponge{R}(sponge.transform, st, k), data
-    elseif len+k <= 2*J*R
+        return update(sponge, st, k), data
+    elseif len+k <= 2*rate(sponge)
         st′ = sponge.transform(st)
-        data = let k=k, st1=reinterpret(NTuple{J*K,UInt8}, st),
+        data = let k=k, st1=reinterpret(NTuple{J*K,UInt8}, st), r=rate(sponge)
             st2=reinterpret(NTuple{J*K,UInt8}, st′)
-            ntuple(i -> i+k <= J*R ? st1[i+k] : st2[i+k-J*R], Val(len))
+            ntuple(i -> i+k <= r ? st1[i+k] : st2[i+k-r], Val(len))
         end
-        k += len - J*R
-        if k == J*R
+        k += len - rate(sponge)
+        if k == rate(sponge)
             st′ = sponge.transform(st′)
             k = 0
         end
-        return Sponge{R}(sponge.transform, st′, k), data
+        return update(sponge, st′, k), data
     else
         sponge, data′ = squeeze(sponge, len)
         return sponge, ntuple(i -> data′[i], Val(len))
@@ -291,27 +304,26 @@ function squeeze(
     sponge::Sponge{R,NTuple{K,T}},
     ::Val{len}
 ) where {R,K,N,ELT<:Unsigned,T<:Vec{N,ELT},len}
-    J = sizeof(ELT)
     k = sponge.k
     st = sponge.state
-    if len+k <= J*R
+    if len+k <= rate(sponge)
         states = let st=st
             ntuple(@inline(n -> ntuple(i -> st[i][n], Val(R))), Val(N))
         end
-        data = let k=k, states=states
+        data = let k=k, states=states, r=rate(sponge)
             ntuple(Val(N)) do n
-                let st=reinterpret(NTuple{J*R,UInt8}, states[n])
+                let st=reinterpret(NTuple{r,UInt8}, states[n])
                     ntuple(i -> st[i+k], Val(len))
                 end
             end
         end
         k += len
-        if k == J*R
+        if k == rate(sponge)
             st = sponge.transform(st)
             k = 0
         end
-        return Sponge{R}(sponge.transform, st, k), data
-    elseif len+k <= 2*J*R
+        return update(sponge, st, k), data
+    elseif len+k <= 2*rate(sponge)
         states = let st=st
             ntuple(@inline(n -> ntuple(i -> st[i][n], Val(R))), Val(N))
         end
@@ -319,21 +331,21 @@ function squeeze(
         states′ = let st=st′
             ntuple(@inline(n -> ntuple(i -> st[i][n], Val(R))), Val(N))
         end
-        data = let k=k, states=states
+        data = let k=k, states=states, r=rate(sponge)
             @inline ntuple(Val(N)) do n
                 @inline
-                let st1=reinterpret(NTuple{J*R,UInt8}, states[n]),
-                    st2=reinterpret(NTuple{J*R,UInt8}, states′[n])
-                    ntuple(i -> i+k <= J*R ? st1[i+k] : st2[i+k-J*R], Val(len))
+                let st1=reinterpret(NTuple{r,UInt8}, states[n]),
+                    st2=reinterpret(NTuple{r,UInt8}, states′[n])
+                    ntuple(i -> i+k <= r ? st1[i+k] : st2[i+k-r], Val(len))
                 end
             end
         end
-        k += len - J*R
-        if k == J*R
+        k += len - rate(sponge)
+        if k == rate(sponge)
             st′ = sponge.transform(st′)
             k = 0
         end
-        return Sponge{R}(sponge.transform, st′, k), data
+        return update(sponge, st′, k), data
     else
         sponge, data′ = squeeze(sponge, len)
         return sponge, ntuple(n -> ntuple(i -> data′[n][i], Val(len)), Val(N))
