@@ -270,22 +270,7 @@ end
 end
 
 @testset "KeccakSponge" begin
-    function shakepad(sponge::Keccak.Sponge{R,NTuple{25,UInt64}}) where {R}
-        J = sizeof(UInt64)
-        i, j = divrem(sponge.k, J)
-        st = let st=sponge.state; ntuple(Val(25)) do l
-            s = st[l]
-            if l == i+1
-                s ⊻= UInt64(0x1f) << (8j)
-            end
-            if l == R
-                s ⊻= UInt64(0x80) << (8*(J-1))
-            end
-            return s
-        end; end
-        st = sponge.transform(st)
-        return Keccak.update(sponge, st, 0)
-    end
+    shakepad = KeccakPad(0x1f)
     # test data from
     # https://csrc.nist.gov/projects/cryptographic-standards-and-guidelines/example-values
     # for SHAKE-128, 0-bit input

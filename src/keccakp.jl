@@ -266,6 +266,53 @@ struct KeccakP{nrounds} end
 (::KeccakP{nrounds})(state::NTuple{25}) where {nrounds} = keccak_p(state, Val(nrounds))
 
 """
+    KeccakPad
+
+A padding function performing the Kᴇᴄᴄᴀᴋ pad10*1 padding with optional suffix bits inserted
+first for domain separation. These suffix bits are specified by providing a byte that
+includes the first 1 bit of the padding.
+
+E.g. for SHA3, the domain separation suffix is `01`, so the padding appends
+`011000...0001`. Noting the LSB-first convention, the first byte of the padding thus has to
+be `0b00000110 == 0x06`, and the corresponding padding function would be instantiated with
+`KeccakPad(0x06)`.
+
+!!! note
+    Only up to six domain separation suffix bits are supported, so including the first
+    padding 1 bit, the first byte has be between 0b00000001 (no suffix bits) and 0b01111111
+    (suffix 111111).
+"""
+struct KeccakPad
+    firstbyte::UInt8
+    function KeccakPad(firstbyte)
+        if !(0x01 <= firstbyte <= 0xf7)
+            throw(ArgumentError("invalid first byte of padding"))
+        end
+        return new(firstbyte)
+    end
+end
+function (pad::KeccakPad)(
+    sponge::Sponge{R,NTuple{K,T}}
+) where {R,K,ELT<:Unsigned,T<:Union{ELT,Vec{<:Any,ELT}}}
+    J = sizeof(ELT)
+    i, j = divrem(sponge.k, J)
+    st = let st=sponge.state
+        ntuple(Val(K)) do l
+            s = st[l]
+            if l == i+1
+                s ⊻= ELT(pad.firstbyte) << (8j)
+            end
+            if l == R
+                s ⊻= ELT(0x80) << (8*(J-1))
+            end
+            return s
+        end
+    end
+    st = sponge.transform(st)
+    return Keccak.update(sponge, st, 0)
+end
+
+"""
     KeccakSponge{R,T,nrounds}
 
 A `Sponge` specialization for Kᴇᴄᴄᴀᴋ:
@@ -276,7 +323,7 @@ A `Sponge` specialization for Kᴇᴄᴄᴀᴋ:
   `T<:SIMD.Vec`).
 """
 const KeccakSponge{R,T<:Union{Unsigned,<:Vec{<:Any,<:Unsigned}},nrounds} =
-    Sponge{R,NTuple{25,T},KeccakP{nrounds}}
+    Sponge{R,NTuple{25,T},KeccakP{nrounds},KeccakPad}
 
 """
     KeccakSponge{R,T,nrounds}(pad)
@@ -284,7 +331,7 @@ const KeccakSponge{R,T<:Union{Unsigned,<:Vec{<:Any,<:Unsigned}},nrounds} =
 Return a zero-initialized `KeccakSponge{R,T,nrounds}` with the provided padding
 function `pad`.
 """
-function KeccakSponge{R,T,nrounds}(pad::F) where {R,T,nrounds,F}
+function KeccakSponge{R,T,nrounds}(pad::KeccakPad) where {R,T,nrounds}
     Sponge{R}(
         KeccakP{nrounds}(),
         pad,
@@ -299,4 +346,4 @@ end
 Return a zero-initialized `KeccakSponge{R,T,nrounds}` with the default `nrounds=12+2ℓ(T)`
 and the provided padding function `pad`.
 """
-KeccakSponge{R,T}(pad::F) where {R,T,F} = KeccakSponge{R,T,12+2ℓ(T)}(pad)
+KeccakSponge{R,T}(pad::KeccakPad) where {R,T} = KeccakSponge{R,T,12+2ℓ(T)}(pad)

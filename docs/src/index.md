@@ -6,6 +6,7 @@ pad
 squeeze
 keccak_p
 KeccakP
+KeccakPad
 KeccakSponge
 ```
 
