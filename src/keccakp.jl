@@ -279,21 +279,24 @@ const KeccakSponge{R,T<:Union{Unsigned,<:Vec{<:Any,<:Unsigned}},nrounds} =
     Sponge{R,NTuple{25,T},KeccakP{nrounds}}
 
 """
-    KeccakSponge{R,T,nrounds}()
+    KeccakSponge{R,T,nrounds}(pad)
 
-Return a zero-initialized `KeccakSponge{R,T,nrounds}`.
+Return a zero-initialized `KeccakSponge{R,T,nrounds}` with the provided padding
+function `pad`.
 """
-function KeccakSponge{R,T,nrounds}() where {R,T,nrounds}
+function KeccakSponge{R,T,nrounds}(pad::F) where {R,T,nrounds,F}
     Sponge{R}(
         KeccakP{nrounds}(),
+        pad,
         ntuple(_ -> zero(T), Val(25)),
         0,
     )
 end
 
 """
-    KeccakSponge{R,T}()
+    KeccakSponge{R,T}(pad)
 
-Return a zero-initialized `KeccakSponge{R,T,nrounds}` with the default `nrounds=12+2ℓ(T)`.
+Return a zero-initialized `KeccakSponge{R,T,nrounds}` with the default `nrounds=12+2ℓ(T)`
+and the provided padding function `pad`.
 """
-KeccakSponge{R,T}() where {R,T} = KeccakSponge{R,T,12+2ℓ(T)}()
+KeccakSponge{R,T}(pad::F) where {R,T,F} = KeccakSponge{R,T,12+2ℓ(T)}(pad)

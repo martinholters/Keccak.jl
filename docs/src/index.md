@@ -2,6 +2,7 @@
 
 ```@docs
 absorb
+pad
 squeeze
 keccak_p
 KeccakP

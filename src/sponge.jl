@@ -1,21 +1,27 @@
 """
-    Sponge{R,T<:NTuple,Fxfm}
+    Sponge{R,T<:NTuple,Fxfm,Fpad}
 
 Cryptographic sponge holding a fixed-length permutation function, state of that length,
-and an offset for byte-wise input and output.
+a function to apply padding, and an offset for byte-wise input and output.
 
 A `Sponge` allows absorbing and squeezing arbitrary-sized data chunks. Once per every rate
-bytes absorbed or squeezed, the permutation function is invoked. Note that a `Sponge` is
-immutable; any operations updating it return an updated `Sponge` instead of mutating the
-given one.
+bytes absorbed or squeezed, the permutation function is invoked. After the last `absorb`
+and before the first `squeeze`, `pad` should be called to perform any necessary padding.
+I.e. the valid sequence of operations on a sponge is: Any number (including zero) calls
+to `absorb`, exactly one call to `pad`, any number (including zero) calls to `squeeze`.
+
+Note that a `Sponge` is immutable; any operations updating it return an updated `Sponge`
+instead of mutating the given one.
 
 # Type parameters
 * `T`: type of the `NTuple` holding the sponge contents
 * `R`: the rate in units of the state elements (`eltype(T)`)
 * `Fxfm`: type of the permutation function
+* `Fpad`: type of the padding function
 
 # Fields
-* `transform`: the permutation function invoked for every rate bytes absorbed or squeezed.
+* `transform`: the permutation function invoked for every rate bytes absorbed or squeezed
+* `pad`: the padding function invoked by `pad(::Sponge)`
 * `state`: the sponge contents
 * `k`: the write (while absorbing) or read (while squeezing) byte offset inside the state,
   between `0` (inclusive) and `R*sizeof(eltype(T))` (exclusive)
@@ -25,13 +31,14 @@ If `T<:SIMD.Vec` (i.e. the state tuple holds `SIMD.Vec`s), absorbing and squeezi
 the individual data paths separately (and the rate in bytes is given by
 `R*sizeof(eltype(eltype(T)))`) in this case.)
 """
-struct Sponge{R,T<:NTuple,Fxfm}
+struct Sponge{R,T<:NTuple,Fxfm,Fpad}
     transform::Fxfm
+    pad::Fpad
     state::T
     k::Int
 end
-Sponge{R}(transform::Fxfm, state::T, k) where {R,T,Fxfm} =
-    Sponge{R,T,Fxfm}(transform, state, k)
+Sponge{R}(transform::Fxfm, pad::Fpad, state::T, k) where {R,T,Fxfm,Fpad} =
+    Sponge{R,T,Fxfm,Fpad}(transform, pad, state, k)
 
 """
     update(sponge::Sponge, state, k)
@@ -39,7 +46,7 @@ Sponge{R}(transform::Fxfm, state::T, k) where {R,T,Fxfm} =
 Return a new `Sponge` of the same type as `sponge` with the same `transform` function, but
 with `state` and `k` replaced with the given values.
 """
-update(sponge::S, state::T, k) where {R,T,S<:Sponge{R,T}} = S(sponge.transform, state, k)
+update(sponge::S, state::T, k) where {R,T,S<:Sponge{R,T}} = S(sponge.transform, sponge.pad, state, k)
 
 """
     rate(sponge::Sponge)
@@ -199,6 +206,7 @@ function absorb(
     sponge′ = @inline absorb(
         Sponge{R}(
             sponge.transform,
+            sponge.pad,
             reinterpret(NTuple{K,ELT}, sponge.state),
             sponge.k,
         ),
@@ -206,10 +214,20 @@ function absorb(
     )
     return Sponge{R}(
         sponge′.transform,
+        sponge′.pad,
         reinterpret(NTuple{K,T}, sponge′.state),
         sponge′.k,
     )
 end
+
+"""
+    pad(sponge)
+
+Applies padding to `sponge` and returns the updated sponge.
+
+Must be called after the last call to `absorb` and before the first call to `squeeze`.
+"""
+pad(sponge::Sponge) = sponge.pad(sponge)
 
 """
     sponge′, data = squeeze(sponge, len)
