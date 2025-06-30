@@ -11,5 +11,6 @@ export KeccakP, KeccakPad, KeccakSponge, absorb, keccak_p, pad, squeeze
 
 include("sponge.jl")
 include("keccakp.jl")
+include("keccaksponge.jl")
 
 end # module Keccak
