@@ -330,3 +330,90 @@ end
     sponge = Keccak.pad(sponge)
     @test Keccak.squeeze(sponge, length(len1600_ref))[2] == len1600_ref
 end
+
+@testset "SHA3-$d" for (d, shafunc, spongefunc, empty_ref, len1600_ref) in [
+    # reference data from
+    # https://csrc.nist.gov/projects/cryptographic-standards-and-guidelines/example-values
+    # for input message lengths 0 bit and 1600 bit
+    (
+        224,
+        sha3_224,
+        sha3_224_sponge,
+        hex2bytes("6B4E03423667DBB73B6E15454F0EB1ABD4597F9A1B078E3F5B5A6BC7"),
+        hex2bytes("9376816ABA503F72F96CE7EB65AC095DEEE3BE4BF9BBC2A1CB7E11E0"),
+    ),
+    (
+        256,
+        sha3_256,
+        sha3_256_sponge,
+        hex2bytes("A7FFC6F8BF1ED76651C14756A061D662F580FF4DE43B49FA82D80A4B80F8434A"),
+        hex2bytes("79F38ADEC5C20307A98EF76E8324AFBFD46CFD81B22E3973C65FA1BD9DE31787"),
+    ),
+    (
+        384,
+        sha3_384,
+        sha3_384_sponge,
+        hex2bytes("0C63A75B845E4F7D01107D852E4C2485C51A50AAAA94FC61995E71BBEE983A2AC3713831264ADB47FB6BD1E058D5F004"),
+        hex2bytes("1881DE2CA7E41EF95DC4732B8F5F002B189CC1E42B74168ED1732649CE1DBCDD76197A31FD55EE989F2D7050DD473E8F"),
+    ),
+    (
+        512,
+        sha3_512,
+        sha3_512_sponge,
+        hex2bytes("A69F73CCA23A9AC5C8B567DC185A756E97C982164FE25859E0D1DCC1475C80A615B2123AF1F5F94C11E3E9402C3AC558F500199D95B6D3E301758586281DCD26"),
+        hex2bytes("E76DFAD22084A8B1467FCF2FFA58361BEC7628EDF5F3FDC0E4805DC48CAEECA81B7C13C30ADF52A3659584739A2DF46BE589C51CA1A4A8416DF6545A1CE8BA00"),
+    ),
+]
+    @test shafunc(UInt8[]) == shafunc(()) == Tuple(empty_ref)
+
+    @test shafunc(fill(0xa3, 200)) == Tuple(len1600_ref)
+
+    sp = spongefunc()
+    for _ in 1:200
+        sp = absorb(sp, tuple(0xa3))
+    end
+    @test squeeze(pad(sp), Val(d÷8))[2] == Tuple(len1600_ref)
+
+    sp = spongefunc()
+    for _ in 1:200
+        sp = absorb(sp, [0xa3])
+    end
+    @test squeeze(pad(sp), Val(d÷8))[2] == Tuple(len1600_ref)
+
+    # now verify with random input - where mis-indexing would matter - that chunked input
+    # behaves identical to en-bloc input
+    input = rand(UInt8, 10_000)
+    sp = spongefunc()
+    k = 0
+    while k < length(input)
+        l = min(rand(0:300), length(input)-k)
+        chunk = input[k+1:k+l]
+        if rand(Bool) # randomly choose between vector and tuple input
+            sp = absorb(sp, chunk)
+        else
+            sp = absorb(sp, Tuple(chunk))
+        end
+        k += l
+    end
+    @test squeeze(pad(sp), Val(d÷8))[2] == shafunc(input)
+
+    # now similarly for SIMD
+    for N in 2:4
+        len = 10_000
+        input = [rand(UInt8, len) for _ in 1:N]
+        sp = spongefunc(Val(N))
+        k = 0
+        while k < len
+            l = min(rand(0:300), len-k)
+            chunks = [inp[k+1:k+l] for inp in input]
+            if l > 16 || rand(Bool) # randomly choose between vector and tuple input for short chunks
+                sp = absorb(sp, chunks...)
+            else
+                sp = absorb(sp, Tuple.(chunks)...)
+            end
+            k += l
+        end
+        # compare chunk-wise SIMD, en-bloc SIMD, and en-bloc non-SIMD cases
+        @test squeeze(pad(sp), Val(d÷8))[2] == shafunc(input...) == Tuple(shafunc(inp) for inp in input)
+    end
+end

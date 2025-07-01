@@ -1,6 +1,14 @@
 # Keccak.jl Documentation
 
 ```@docs
+sha3_224
+sha3_256
+sha3_384
+sha3_512
+sha3_224_sponge
+sha3_256_sponge
+sha3_384_sponge
+sha3_512_sponge
 absorb
 pad
 squeeze
