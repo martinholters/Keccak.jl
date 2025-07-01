@@ -5,7 +5,7 @@ Convenience wrapper for `keccak_p` with `nrounds` fixed.
 
 This allows replacing constructions like `state -> keccak_p(state, Val(nrounds))`
 with `KeccakP{nrounds}()`:
-```jldoctest; setup=:(using Keccak; state=Tuple(zeros(UInt64,25)))
+```jldoctest; setup=:(using Keccak; state=Tuple(zeros(UInt64,25))), filter=r"^#\\d*"
 julia> const f1 = KeccakP{23}()
 KeccakP{23}()
 
