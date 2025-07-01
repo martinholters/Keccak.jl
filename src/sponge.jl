@@ -234,7 +234,7 @@ pad(sponge::Sponge) = sponge.pad(sponge)
 
 Squeezes `len` bytes from the `sponge` and returns the updated sponge and the obtained data.
 
-If `len` is a `Val`, the `data` is returned as a tuple, otherwise as a `Memory{UInt8}`.
+If `len` is a `Val`, the `data` is returned as a tuple, otherwise as a `Vector{UInt8}`.
 
 If the `sponge` holds `SIMD.Vec{N}`s, the returned `data` is an `N`-tuple of the data
 squeezed form the respective data paths.
@@ -243,7 +243,7 @@ function squeeze end
 
 function squeeze(sponge::Sponge{R,NTuple{K,T}}, len) where {R,K,T<:Unsigned}
     J = sizeof(T)
-    data = Memory{UInt8}(undef, len)
+    data = Vector{UInt8}(undef, len)
     k = sponge.k
     st = sponge.state
     n = 1
@@ -264,7 +264,7 @@ function squeeze(
     sponge::Sponge{R,NTuple{K,T}},
     len,
 ) where {R,K,N,ELT<:Unsigned,T<:Vec{N,ELT}}
-    data = ntuple(_ -> Memory{UInt8}(undef, len), Val(N))
+    data = ntuple(_ -> Vector{UInt8}(undef, len), Val(N))
     k = sponge.k
     st = sponge.state
     n = 1
