@@ -8,9 +8,14 @@ end
 using SIMD: Vec
 
 export KeccakP, KeccakPad, KeccakSponge, absorb, keccak_p, pad, squeeze
+export sha3_224, sha3_224_sponge, sha3_256, sha3_256_sponge, sha3_384, sha3_384_sponge,
+    sha3_512, sha3_512_sponge
+export shake_128, shake_128_sponge, shake_256, shake_256_sponge
 
 include("sponge.jl")
 include("keccakp.jl")
 include("keccaksponge.jl")
+include("sha3.jl")
+include("shake.jl")
 
 end # module Keccak
