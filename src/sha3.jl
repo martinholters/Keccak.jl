@@ -23,8 +23,9 @@ for d in [224, 256, 384, 512]
 
         Computes the SHA3-$($d) hash of `data`.
 
-        The provided `data` must be an `AbstractVector` or a `Tuple` of `UInt8`s, the hash
-        is returned as a $($(d÷8))-tuple of `UInt8`s.
+        The provided `data` must be an `AbstractVector` or a `Tuple` of `UInt8`s, or a
+        `String` (which is converted to bytes by `codeunits`).
+        The hash is returned as a $($(d÷8))-tuple of `UInt8`s.
 
         # Examples
 
@@ -33,7 +34,7 @@ for d in [224, 256, 384, 512]
         $($shafunc(fill(0xa3, 200)))
         ```
         """
-        function $shafunc(data::Union{AbstractVector{UInt8},NTuple{<:Any,UInt8}})
+        function $shafunc(data::AbsorbableData)
             sponge = $spongefunc()
             sponge = absorb(sponge, data)
             sponge = pad(sponge)
@@ -45,14 +46,13 @@ for d in [224, 256, 384, 512]
 
         Computes the SHA3-$($d) hashes of `data1`, ..., `dataN` (for `N >= 2`).
 
-        The provided data must be `AbstractVector`s or `Tuple`s of `UInt8`s, and they all
-        must have the same length as SIMD is used to speed up the hash computation.
+        The provided data must be `AbstractVector`s or `Tuple`s of `UInt8`s or `Strings`,
+        and they all must have the same length in bytes (using `codeunits` for `String`s)
+        as SIMD is used to speed up the hash computation.
         The hashes are returned as an `N`-tuple of $($(d÷8))-tuples of `UInt8`s.
         """
-        function $shafunc(
-            data::Vararg{Union{AbstractVector{UInt8},NTuple{<:Any,UInt8}},N},
-        ) where {N}
-            if !allequal(map(length, data))
+        function $shafunc(data::Vararg{AbsorbableData,N}) where {N}
+            if !allequal(map(absorblength, data))
                 throw(DimensionMismatch("data arguments provided to `$($shafunc)` have different length"))
             end
             sponge = $spongefunc(Val(N))

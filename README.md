@@ -12,8 +12,8 @@ for details on the algorithms implemented in this package.
 
 SHA3 hashes can be computed with `sha3_224`, `sha3_256`, `sha3_384`, and `sha3_512`, which
 behave similar to their cousins in `SHA.jl`, with two important differences:
-* The input is restricted to being an `AbstractVector{UInt8}` or a `Tuple{Vararg{UInt8}}`.
-  (This might be relaxed in the future.)
+* The input is restricted to being an `AbstractVector{UInt8}`, a `Tuple{Vararg{UInt8}}` or
+  a `String`.
 * The output is an `NTuple{N,UInt8}` (with `N` depending on hash length, e.g.
   `N==256÷8==32` for SHA3-256).
 
