@@ -84,7 +84,20 @@ end
 end
 
 """
-    absorb(sponge::Sponge, data::Union{AbstractVector{UInt8},NTuple{<:Any,UInt8}})
+    AbsorbableData
+
+Type alias for the type of data acceptable as input to `absorb`.
+
+If a `String` is to be absorbed, its `codeunits` are used.
+"""
+const AbsorbableData = Union{AbstractVector{UInt8},NTuple{<:Any,UInt8},String}
+
+absorblength(::NTuple{N,UInt8}) where {N} = N
+absorblength(data::AbstractVector{UInt8}) = length(data)
+absorblength(data::String) = ncodeunits(data)
+
+"""
+    absorb(sponge::Sponge, data::AbsorbableData)
 
 Absorbs the provided `data` into the `sponge` and returns the updated sponge.
 
@@ -95,8 +108,11 @@ If the sponge holds `SIMD.Vec`s, the same `data` is used for every data path.
 """
 function absorb(
     sponge::Sponge{R,NTuple{K,T}},
-    data::Union{AbstractVector{UInt8},NTuple{<:Any,UInt8}}
+    data::AbsorbableData
 ) where {R,K,ELT<:Unsigned,T<:Union{ELT,Vec{<:Any,ELT}}}
+    if data isa String
+        data = codeunits(data)
+    end
     st = sponge.state
     k = sponge.k
     n = 0
@@ -147,8 +163,9 @@ However, before the first `squeeze`, appropriate padding should be performed.
 """
 function absorb(
     sponge::Sponge{R,NTuple{K,T}},
-    data::Vararg{Union{AbstractVector{UInt8},NTuple{<:Any,UInt8}},N}
+    data::Vararg{AbsorbableData,N}
 ) where {R,K,N,ELT<:Unsigned,T<:Vec{N,ELT}}
+    data = map(d -> d isa String ? codeunits(d) : d, data)
     if !allequal(map(length, data))
         throw(DimensionMismatch("data arguments provided to `absorb` have different length"))
     end
@@ -201,7 +218,7 @@ end
 # prevent ambiguity and solve be reinterpreting `Vec{1,T}` as `T`
 function absorb(
     sponge::Sponge{R,NTuple{K,T}},
-    data::Union{AbstractVector{UInt8},NTuple{<:Any,UInt8}}
+    data::AbsorbableData
 ) where {R,K,ELT<:Unsigned,T<:Vec{1,ELT}}
     sponge′ = @inline absorb(
         Sponge{R}(

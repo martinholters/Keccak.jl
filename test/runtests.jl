@@ -4,21 +4,21 @@ using SIMD: Vec
 using Test: @test, @test_throws, @testset
 
 @testset "Sponge" begin
-    @testset "identity sponge" for (maybe_tup, maybe_val) in ((identity, identity), (Tuple, Val))
+    @testset "identity sponge" for intype in [identity, Tuple, String], maybe_val in [identity, Val]
         sponge = Keccak.Sponge{3}(identity, identity, Tuple(zeros(UInt16,7)), 0)
-        sponge = Keccak.absorb(sponge, maybe_tup([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]))
+        sponge = Keccak.absorb(sponge, intype([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]))
         @test sponge.state == (0x0201, 0x0403, 0x0605, 0x0000, 0x0000, 0x0000, 0x0000)
-        sponge = Keccak.absorb(sponge, maybe_tup([0x07, 0x08, 0x09]))
+        sponge = Keccak.absorb(sponge, intype([0x07, 0x08, 0x09]))
         @test sponge.state == (
             0x0201 ⊻ 0x0807, 0x0403 ⊻ 0x0009, 0x0605,
             0x0000, 0x0000, 0x0000, 0x0000
         )
-        sponge = Keccak.absorb(sponge, maybe_tup([0x0a, 0x0b, 0x0c, 0x0d]))
+        sponge = Keccak.absorb(sponge, intype([0x0a, 0x0b, 0x0c, 0x0d]))
         @test sponge.state == (
             0x0201 ⊻ 0x0807 ⊻ 0x000d, 0x0403 ⊻ 0x0a09, 0x0605 ⊻ 0x0c0b,
             0x0000, 0x0000, 0x0000, 0x0000
         )
-        sponge = Keccak.absorb(sponge, maybe_tup(zeros(UInt8, 5)))
+        sponge = Keccak.absorb(sponge, intype(zeros(UInt8, 5)))
         ref_output = [0x01 ⊻ 0x07 ⊻ 0x0d, 0x02 ⊻ 0x08, 0x03 ⊻ 0x09, 0x04 ⊻ 0x0a, 0x05 ⊻ 0x0b, 0x06 ⊻ 0x0c]
         i = 1
         for l in 0:20
@@ -30,22 +30,22 @@ using Test: @test, @test_throws, @testset
             end
         end
     end
-    @testset "rot sponge" for (maybe_tup, maybe_val) in ((identity, identity), (Tuple, Val))
+    @testset "rot sponge" for intype in [identity, Tuple, String], maybe_val in [identity, Val]
         f(state) = (state[end], state[1:end-1]...)
         sponge = Keccak.Sponge{3}(f, identity, Tuple(zeros(UInt16,7)), 0)
-        sponge = Keccak.absorb(sponge, maybe_tup([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]))
+        sponge = Keccak.absorb(sponge, intype([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]))
         @test sponge.state == (0x0000, 0x0201, 0x0403, 0x0605, 0x0000, 0x0000, 0x0000)
-        sponge = Keccak.absorb(sponge, maybe_tup([0x07, 0x08, 0x09]))
+        sponge = Keccak.absorb(sponge, intype([0x07, 0x08, 0x09]))
         @test sponge.state == (
             0x0807, 0x0201 ⊻ 0x0009, 0x0403,
             0x0605, 0x0000, 0x0000, 0x0000
         )
-        sponge = Keccak.absorb(sponge, maybe_tup([0x0a, 0x0b, 0x0c, 0x0d]))
+        sponge = Keccak.absorb(sponge, intype([0x0a, 0x0b, 0x0c, 0x0d]))
         @test sponge.state == (
             0x000d, 0x0807, 0x0201 ⊻ 0x0a09, 0x0403 ⊻ 0x0c0b,
             0x0605, 0x0000, 0x0000
         )
-        sponge = Keccak.absorb(sponge, maybe_tup(zeros(UInt8, 5)))
+        sponge = Keccak.absorb(sponge, intype(zeros(UInt8, 5)))
         ref_output = [
             0x00, 0x00, 0x0d, 0x00, 0x07, 0x08, 0x01 ⊻ 0x09, 0x02 ⊻ 0x0a,
             0x03 ⊻ 0x0b, 0x04 ⊻ 0x0c, 0x05, 0x06, 0x00, 0x00
@@ -73,9 +73,8 @@ using Test: @test, @test_throws, @testset
             # single (same) message for all N instances
             len = rand(0:8)
             msg = rand(UInt8, len)
-            if rand(Bool)
-                msg = Tuple(msg)
-            end
+            # 50% keep a Vector, 25% Tuple, 25% String
+            msg = rand(Bool) ? msg : rand(Bool) ? Tuple(msg) : String(msg)
             ref_sponges = map(sponge -> Keccak.absorb(sponge, msg), ref_sponges)
             simd_sponge = Keccak.absorb(simd_sponge, msg)
             for n in 1:N
@@ -85,9 +84,9 @@ using Test: @test, @test_throws, @testset
         for _ in 1:100
             # different message per instance
             len = rand(0:8)
-            msgs = [rand(UInt8, len) for _ in 1:N]
-            if rand(Bool)
-                msgs = Tuple.(msgs)
+            msgs = map([rand(UInt8, len) for _ in 1:N]) do msg
+                # 50% keep a Vector, 25% Tuple, 25% String
+                return rand(Bool) ? msg : rand(Bool) ? Tuple(msg) : String(msg)
             end
             ref_sponges = map((sponge, msg) -> Keccak.absorb(sponge, msg), ref_sponges, msgs)
             simd_sponge = Keccak.absorb(simd_sponge, msgs...)
@@ -100,9 +99,9 @@ using Test: @test, @test_throws, @testset
         end
         # padding
         len = 6 - simd_sponge.k
-        msgs = [zeros(UInt8, len) for _ in 1:N]
-        if rand(Bool)
-            msgs = Tuple.(msgs)
+        msgs =  map([zeros(UInt8, len) for _ in 1:N]) do msg
+            # 50% keep a Vector, 25% Tuple, 25% String
+            return rand(Bool) ? msg : rand(Bool) ? Tuple(msg) : String(msg)
         end
         ref_sponges = map((sponge, msg) -> Keccak.absorb(sponge, msg), ref_sponges, msgs)
         simd_sponge = Keccak.absorb(simd_sponge, msgs...)
@@ -364,9 +363,9 @@ end
         hex2bytes("E76DFAD22084A8B1467FCF2FFA58361BEC7628EDF5F3FDC0E4805DC48CAEECA81B7C13C30ADF52A3659584739A2DF46BE589C51CA1A4A8416DF6545A1CE8BA00"),
     ),
 ]
-    @test shafunc(UInt8[]) == shafunc(()) == Tuple(empty_ref)
+    @test shafunc(UInt8[]) == shafunc(()) == shafunc("") == Tuple(empty_ref)
 
-    @test shafunc(fill(0xa3, 200)) == Tuple(len1600_ref)
+    @test shafunc(fill(0xa3, 200)) == shafunc("\xa3"^200) == Tuple(len1600_ref)
 
     sp = spongefunc()
     for _ in 1:200
@@ -380,6 +379,12 @@ end
     end
     @test squeeze(pad(sp), Val(d÷8))[2] == Tuple(len1600_ref)
 
+    sp = spongefunc()
+    for _ in 1:200
+        sp = absorb(sp, "\xa3")
+    end
+    @test squeeze(pad(sp), Val(d÷8))[2] == Tuple(len1600_ref)
+
     # now verify with random input - where mis-indexing would matter - that chunked input
     # behaves identical to en-bloc input
     input = rand(UInt8, 10_000)
@@ -388,11 +393,9 @@ end
     while k < length(input)
         l = min(rand(0:300), length(input)-k)
         chunk = input[k+1:k+l]
-        if rand(Bool) # randomly choose between vector and tuple input
-            sp = absorb(sp, chunk)
-        else
-            sp = absorb(sp, Tuple(chunk))
-        end
+        # mixed type case tested for SHAKE only to avoid excessive test times
+        # chunk = rand(Bool) ? chunk : l <= 16 && rand(Bool) ? Tuple(chunk) : String(chunk)
+        sp = absorb(sp, chunk)
         k += l
     end
     @test squeeze(pad(sp), Val(d÷8))[2] == shafunc(input)
@@ -406,15 +409,20 @@ end
         while k < len
             l = min(rand(0:300), len-k)
             chunks = [inp[k+1:k+l] for inp in input]
-            if l > 16 || rand(Bool) # randomly choose between vector and tuple input for short chunks
-                sp = absorb(sp, chunks...)
-            else
-                sp = absorb(sp, Tuple.(chunks)...)
-            end
+            # mixed type case tested for SHAKE only to avoid excessive test times
+            # chunks = map([inp[k+1:k+l] for inp in input]) do chunk
+            #     rand(Bool) ? chunk : l <= 16 && rand(Bool) ? Tuple(chunk) : String(chunk)
+            # end
+            sp = absorb(sp, chunks...)
             k += l
         end
         # compare chunk-wise SIMD, en-bloc SIMD, and en-bloc non-SIMD cases
-        @test squeeze(pad(sp), Val(d÷8))[2] == shafunc(input...) == Tuple(shafunc(inp) for inp in input)
+        input′ = map(input) do msg
+             # 50% keep a Vector, 50% String
+            rand(Bool) ? msg : String(copy(msg))
+        end
+
+        @test squeeze(pad(sp), Val(d÷8))[2] == shafunc(input′...) == Tuple(shafunc(inp) for inp in input)
     end
 end
 
@@ -459,6 +467,12 @@ end
     end
     @test squeeze(pad(sp), length(len1600_ref))[2] == len1600_ref
 
+    sp = spongefunc()
+    for _ in 1:200
+        sp = absorb(sp, "\xa3")
+    end
+    @test squeeze(pad(sp), length(len1600_ref))[2] == len1600_ref
+
     # now verify with random input - where mis-indexing would matter - that chunked
     # input/output behaves identical to en-bloc input/output
     input = rand(UInt8, 10_000)
@@ -467,11 +481,8 @@ end
     while k < length(input)
         l = min(rand(0:300), length(input)-k)
         chunk = input[k+1:k+l]
-        if l > 32 || rand(Bool) # randomly choose between vector and tuple input for short chunks
-            sp = absorb(sp, chunk)
-        else
-            sp = absorb(sp, Tuple(chunk))
-        end
+        chunk = rand(Bool) ? chunk : l <= 16 && rand(Bool) ? Tuple(chunk) : String(chunk)
+        sp = absorb(sp, chunk)
         k += l
     end
     sp = pad(sp)
@@ -497,12 +508,11 @@ end
         k = 0
         while k < len
             l = min(rand(0:300), len-k)
-            chunks = [inp[k+1:k+l] for inp in input]
-            if l > 16 || rand(Bool) # randomly choose between vector and tuple input for short chunks
-                sp = absorb(sp, chunks...)
-            else
-                sp = absorb(sp, Tuple.(chunks)...)
+            # TODO this mixture of types leads to excessive test times (due to compilation)
+            chunks = map([inp[k+1:k+l] for inp in input]) do chunk
+                rand(Bool) ? chunk : l <= 16 && rand(Bool) ? Tuple(chunk) : String(chunk)
             end
+            sp = absorb(sp, chunks...)
             k += l
         end
         sp = pad(sp)
@@ -522,6 +532,10 @@ end
             k += l
         end
         # compare chunk-wise SIMD, en-bloc SIMD, and en-bloc non-SIMD cases
-        @test output == collect(shakefunc(input..., len)) == [shakefunc(inp, len) for inp in input]
+        input′ = map(input) do msg
+             # 50% keep a Vector, 50% String
+            rand(Bool) ? msg : String(copy(msg))
+        end
+        @test output == collect(shakefunc(input′..., len)) == [shakefunc(inp, len) for inp in input]
     end
 end

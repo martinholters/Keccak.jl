@@ -26,6 +26,7 @@ KeccakSponge
 ### Sponge
 ```@docs
 Keccak.Sponge
+Keccak.AbsorbableData
 Keccak.update
 Keccak.rate
 ```
