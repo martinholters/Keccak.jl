@@ -13,6 +13,10 @@ sha3_384_sponge
 sha3_512_sponge
 shake_128_sponge
 shake_256_sponge
+cshake_128
+cshake_256
+cshake_128_sponge
+cshake_256_sponge
 absorb
 pad
 squeeze
@@ -45,4 +49,11 @@ Keccak.θ
 Keccak.π
 Keccak.χ
 Keccak.ρ
+```
+
+### SP.800-185 helpers
+```@docs
+Keccak.absorb_left_encoded
+Keccak.absorb_encoded_string
+Keccak.absorb_ratepadded
 ```

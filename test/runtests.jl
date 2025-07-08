@@ -539,3 +539,49 @@ end
         @test output == collect(shakefunc(input′..., len)) == [shakefunc(inp, len) for inp in input]
     end
 end
+
+@testset "cSHAKE" begin
+    # https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/cSHAKE_samples.pdf
+
+    # for each sample, test some subset of possible input type combinations
+    # more thourough testing (e.g. piece-wise input/output) is only done for SHAKE above
+    # which uses the same underlying machinery
+
+    # sample #1
+    expected = hex2bytes("C1C36925B6409A04F1B504FCBCA9D82B4017277CB5ED2B2065FC1D3814D5AAF5")
+    @test squeeze(pad(absorb(cshake_128_sponge("", "Email Signature"), 0x00:0x03)), 32)[2] == expected
+    @test squeeze(cshake_128(0x00:0x03, "", "Email Signature"), 32)[2] == expected
+    @test cshake_128(0x00:0x03, 32, "", "Email Signature") == expected
+    @test cshake_128(Tuple(0x00:0x03), 32, (), codeunits("Email Signature")) == expected
+    @test cshake_128(String(0x00:0x03), 32, UInt8[], "Email Signature") == expected
+    @test cshake_128(0x00:0x03, Val(32), "", "Email Signature") == Tuple(expected)
+    @test cshake_128(Tuple(0x00:0x03), Val(32), (), "Email Signature") == Tuple(expected)
+    @test cshake_128(String(0x00:0x03), Val(32), UInt8[], Tuple(codeunits("Email Signature"))) == Tuple(expected)
+
+    # sample #2
+    expected = hex2bytes("C5221D50E4F822D96A2E8881A961420F294B7B24FE3D2094BAED2C6524CC166B")
+    @test squeeze(pad(absorb(cshake_128_sponge("", "Email Signature"), 0x00:0xc7)), 32)[2] == expected
+    @test squeeze(cshake_128(0x00:0xc7, "", "Email Signature"), 32)[2] == expected
+    @test cshake_128(0x00:0xc7, 32, "", "Email Signature") == expected
+    @test cshake_128(String(0x00:0xc7), 32, (), "Email Signature") == expected
+    @test cshake_128(0x00:0xc7, Val(32), UInt8[], "Email Signature") == Tuple(expected)
+    @test cshake_128(String(0x00:0xc7), Val(32), "", codeunits("Email Signature")) == Tuple(expected)
+
+    # sample #3
+    expected = hex2bytes("D008828E2B80AC9D2218FFEE1D070C48B8E4C87BFF32C9699D5B6896EEE0EDD164020E2BE0560858D9C00C037E34A96937C561A74C412BB4C746469527281C8C")
+    @test squeeze(pad(absorb(cshake_256_sponge("", "Email Signature"), 0x00:0x03)), 64)[2] == expected
+    @test squeeze(cshake_256(0x00:0x03, "", "Email Signature"), 64)[2] == expected
+    @test cshake_256(0x00:0x03, 64, (), "Email Signature") == expected
+    @test cshake_256(Tuple(0x00:0x03), 64, UInt8[], "Email Signature") == expected
+    @test cshake_256(String(0x00:0x03), 64, "", codeunits("Email Signature")) == expected
+    @test cshake_256(0x00:0x03, Val(64), UInt8[], codeunits("Email Signature")) == Tuple(expected)
+    @test cshake_256(Tuple(0x00:0x03), Val(64), (), codeunits("Email Signature")) == Tuple(expected)
+    @test cshake_256(String(0x00:0x03), Val(64), "", "Email Signature") == Tuple(expected)
+
+    # sample #4
+    expected = hex2bytes("07DC27B11E51FBAC75BC7B3C1D983E8B4B85FB1DEFAF218912AC86430273091727F42B17ED1DF63E8EC118F04B23633C1DFB1574C8FB55CB45DA8E25AFB092BB")
+    @test squeeze(pad(absorb(cshake_256_sponge("", "Email Signature"), 0x00:0xc7)), 64)[2] == expected
+    @test squeeze(cshake_256(0x00:0xc7, "", "Email Signature"), 64)[2] == expected
+    @test cshake_256(0x00:0xc7, 64, "", Tuple(codeunits("Email Signature"))) == expected
+    @test cshake_256(0x00:0xc7, Val(64), "", "Email Signature") == Tuple(expected)
+end
