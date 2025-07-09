@@ -12,6 +12,7 @@ export sha3_224, sha3_224_sponge, sha3_256, sha3_256_sponge, sha3_384, sha3_384_
     sha3_512, sha3_512_sponge
 export shake_128, shake_128_sponge, shake_256, shake_256_sponge
 export cshake_128, cshake_128_sponge, cshake_256, cshake_256_sponge
+export kmac_128, kmac_xof_128, kmac_128_sponge, kmac_256, kmac_xof_256, kmac_256_sponge
 
 include("sponge.jl")
 include("keccakp.jl")
@@ -20,5 +21,6 @@ include("sha3.jl")
 include("shake.jl")
 include("sp800-185-helpers.jl")
 include("cshake.jl")
+include("kmac.jl")
 
 end # module Keccak

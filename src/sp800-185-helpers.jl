@@ -1,4 +1,38 @@
 """
+    absorb_right_encoded(sponge::Sponge, x::Integer)
+
+Absorbs the non-negative integer `x` into the given `sponge` after applying the
+"right_encode" operation from [NIST SP.800-185](https://doi.org/10.6028/NIST.SP.800-185)
+to it.
+
+!!! note
+    The current implementation requires `x ≤ typemax(UInt64)`.
+"""
+absorb_right_encoded(sponge::Sponge, x::Integer) =
+    absorb_right_encoded(sponge, convert(UInt64, x))
+function absorb_right_encoded(sponge::Sponge, x::UInt64)
+    x = reinterpret(NTuple{8, UInt8}, x)
+    if x[8] != 0
+        sponge = absorb(sponge, (reverse(x)..., 0x08))
+    elseif x[7] != 0
+        sponge = absorb(sponge, (reverse(x[1:7])..., 0x07))
+    elseif x[6] != 0
+        sponge = absorb(sponge, (reverse(x[1:6])..., 0x06))
+    elseif x[5] != 0
+        sponge = absorb(sponge, (reverse(x[1:5])..., 0x05))
+    elseif x[4] != 0
+        sponge = absorb(sponge, (reverse(x[1:4])..., 0x04))
+    elseif x[3] != 0
+        sponge = absorb(sponge, (reverse(x[1:3])..., 0x03))
+    elseif x[2] != 0
+        sponge = absorb(sponge, (reverse(x[1:2])..., 0x02))
+    else
+        sponge = absorb(sponge, (x[1], 0x01))
+    end
+    return sponge
+end
+
+"""
     absorb_left_encoded(sponge::Sponge, x::Integer)
 
 Absorbs the non-negative integer `x` into the given `sponge` after applying the

@@ -17,6 +17,12 @@ cshake_128
 cshake_256
 cshake_128_sponge
 cshake_256_sponge
+kmac_128
+kmac_256
+kmac_xof_128
+kmac_xof_256
+kmac_128_sponge
+kmac_256_sponge
 absorb
 pad
 squeeze
@@ -53,7 +59,9 @@ Keccak.ρ
 
 ### SP.800-185 helpers
 ```@docs
+Keccak.absorb_right_encoded
 Keccak.absorb_left_encoded
 Keccak.absorb_encoded_string
 Keccak.absorb_ratepadded
+Keccak.KMACPad
 ```
