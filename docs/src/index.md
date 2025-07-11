@@ -23,6 +23,10 @@ kmac_xof_128
 kmac_xof_256
 kmac_128_sponge
 kmac_256_sponge
+tuplehash_128
+tuplehash_256
+tuplehash_xof_128
+tuplehash_xof_256
 absorb
 pad
 squeeze
