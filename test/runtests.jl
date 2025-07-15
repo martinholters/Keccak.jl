@@ -763,3 +763,95 @@ end
     @test tuplehash_xof_256([d for d in [0x00:0x02, String(0x10:0x15), 0x20:0x28]], Val(64), Tuple(codeunits("My Tuple App"))) == Tuple(expected)
     @test tuplehash_xof_256((Tuple(0x00:0x02), 0x10:0x15, 0x20:0x28), 64, "My Tuple App") == expected
 end
+
+@testset "ParallelHash" begin
+    for threaded in [false, true]
+        # https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/ParallelHash_samples.pdf
+
+        # sample 1
+        expected = hex2bytes("BA8DC1D1D979331D3F813603C67F72609AB5E44B94A0B8F9AF46514454A2B4F5")
+        @test parallelhash_128([0x00:0x07; 0x10:0x17; 0x20:0x27], 8, 32; threaded) == expected
+        @test parallelhash_128(String([0x00:0x07; 0x10:0x17; 0x20:0x27]), 8, Val(32); threaded) == Tuple(expected)
+
+        # sample 2
+        expected = hex2bytes("FC484DCB3F84DCEEDC353438151BEE58157D6EFED0445A81F165E495795B7206")
+        @test parallelhash_128(String([0x00:0x07; 0x10:0x17; 0x20:0x27]), 8, 32, "Parallel Data"; threaded) == expected
+        @test parallelhash_128([0x00:0x07; 0x10:0x17; 0x20:0x27], 8, Val(32), codeunits("Parallel Data"); threaded) == Tuple(expected)
+
+        # sample 3
+        expected = hex2bytes("F7FD5312896C6685C828AF7E2ADB97E393E7F8D54E3C2EA4B95E5ACA3796E8FC")
+        @test parallelhash_128([0x00:0x0b; 0x10:0x1b; 0x20:0x2b; 0x30:0x3b; 0x40:0x4b; 0x50:0x5b], 12, 32, "Parallel Data"; threaded) == expected
+        @test parallelhash_128(String([0x00:0x0b; 0x10:0x1b; 0x20:0x2b; 0x30:0x3b; 0x40:0x4b; 0x50:0x5b]), 12, Val(32), codeunits("Parallel Data"); threaded) == Tuple(expected)
+
+        # sample 1 (sic!)
+        expected = hex2bytes("BC1EF124DA34495E948EAD207DD9842235DA432D2BBC54B4C110E64C451105531B7F2A3E0CE055C02805E7C2DE1FB746AF97A1DD01F43B824E31B87612410429")
+        @test parallelhash_256(String([0x00:0x07; 0x10:0x17; 0x20:0x27]), 8, 64; threaded) == expected
+        @test parallelhash_256([0x00:0x07; 0x10:0x17; 0x20:0x27], 8, Val(64); threaded) == Tuple(expected)
+
+        # sample 2
+        expected = hex2bytes("CDF15289B54F6212B4BC270528B49526006DD9B54E2B6ADD1EF6900DDA3963BB33A72491F236969CA8AFAEA29C682D47A393C065B38E29FAE651A2091C833110")
+        @test parallelhash_256(String([0x00:0x07; 0x10:0x17; 0x20:0x27]), 8, 64, "Parallel Data"; threaded) == expected
+        @test parallelhash_256([0x00:0x07; 0x10:0x17; 0x20:0x27], 8, Val(64), codeunits("Parallel Data"); threaded) == Tuple(expected)
+
+        # sample 3
+        expected = hex2bytes("69D0FCB764EA055DD09334BC6021CB7E4B61348DFF375DA262671CDEC3EFFA8D1B4568A6CCE16B1CAD946DDDE27F6CE2B8DEE4CD1B24851EBF00EB90D43813E9")
+        @test parallelhash_256([0x00:0x0b; 0x10:0x1b; 0x20:0x2b; 0x30:0x3b; 0x40:0x4b; 0x50:0x5b], 12, 64, "Parallel Data"; threaded) == expected
+        @test parallelhash_256(String([0x00:0x0b; 0x10:0x1b; 0x20:0x2b; 0x30:0x3b; 0x40:0x4b; 0x50:0x5b]), 12, Val(64), codeunits("Parallel Data"); threaded) == Tuple(expected)
+
+        # https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/ParallelHashXOF_samples.pdf
+
+        # sample 1
+        expected = hex2bytes("FE47D661E49FFE5B7D999922C062356750CAF552985B8E8CE6667F2727C3C8D3")
+        @test squeeze(parallelhash_xof_128([0x00:0x07; 0x10:0x17; 0x20:0x27], 8; threaded), 32)[2] == expected
+        @test parallelhash_xof_128([0x00:0x07; 0x10:0x17; 0x20:0x27], 8, 32; threaded) == expected
+        @test parallelhash_xof_128(String([0x00:0x07; 0x10:0x17; 0x20:0x27]), 8, Val(32); threaded) == Tuple(expected)
+
+        # sample 2
+        expected = hex2bytes("EA2A793140820F7A128B8EB70A9439F93257C6E6E79B4A540D291D6DAE7098D7")
+        @test squeeze(parallelhash_xof_128(String([0x00:0x07; 0x10:0x17; 0x20:0x27]), 8, "Parallel Data"; threaded), 32)[2] == expected
+        @test parallelhash_xof_128(String([0x00:0x07; 0x10:0x17; 0x20:0x27]), 8, 32, "Parallel Data"; threaded) == expected
+        @test parallelhash_xof_128([0x00:0x07; 0x10:0x17; 0x20:0x27], 8, Val(32), codeunits("Parallel Data"); threaded) == Tuple(expected)
+
+        # sample 3
+        expected = hex2bytes("0127AD9772AB904691987FCC4A24888F341FA0DB2145E872D4EFD255376602F0")
+        @test squeeze(parallelhash_xof_128([0x00:0x0b; 0x10:0x1b; 0x20:0x2b; 0x30:0x3b; 0x40:0x4b; 0x50:0x5b], 12, "Parallel Data"; threaded), 32)[2] == expected
+        @test parallelhash_xof_128([0x00:0x0b; 0x10:0x1b; 0x20:0x2b; 0x30:0x3b; 0x40:0x4b; 0x50:0x5b], 12, 32, "Parallel Data"; threaded) == expected
+        @test parallelhash_xof_128(String([0x00:0x0b; 0x10:0x1b; 0x20:0x2b; 0x30:0x3b; 0x40:0x4b; 0x50:0x5b]), 12, Val(32), codeunits("Parallel Data"); threaded) == Tuple(expected)
+
+        # sample 1 (sic!)
+        expected = hex2bytes("C10A052722614684144D28474850B410757E3CBA87651BA167A5CBDDFF7F466675FBF84BCAE7378AC444BE681D729499AFCA667FB879348BFDDA427863C82F1C")
+        @test squeeze(parallelhash_xof_256(String([0x00:0x07; 0x10:0x17; 0x20:0x27]), 8; threaded), 64)[2] == expected
+        @test parallelhash_xof_256(String([0x00:0x07; 0x10:0x17; 0x20:0x27]), 8, 64; threaded) == expected
+        @test parallelhash_xof_256([0x00:0x07; 0x10:0x17; 0x20:0x27], 8, Val(64); threaded) == Tuple(expected)
+
+        # sample 2
+        expected = hex2bytes("538E105F1A22F44ED2F5CC1674FBD40BE803D9C99BF5F8D90A2C8193F3FE6EA768E5C1A20987E2C9C65FEBED03887A51D35624ED12377594B5585541DC377EFC")
+        @test squeeze(parallelhash_xof_256(String([0x00:0x07; 0x10:0x17; 0x20:0x27]), 8, "Parallel Data"; threaded), 64)[2] == expected
+        @test parallelhash_xof_256(String([0x00:0x07; 0x10:0x17; 0x20:0x27]), 8, 64, "Parallel Data"; threaded) == expected
+        @test parallelhash_xof_256([0x00:0x07; 0x10:0x17; 0x20:0x27], 8, Val(64), codeunits("Parallel Data"); threaded) == Tuple(expected)
+
+        # sample 3
+        expected = hex2bytes("6B3E790B330C889A204C2FBC728D809F19367328D852F4002DC829F73AFD6BCEFB7FE5B607B13A801C0BE5C1170BDB794E339458FDB0E62A6AF3D42558970249")
+        @test squeeze(parallelhash_xof_256([0x00:0x0b; 0x10:0x1b; 0x20:0x2b; 0x30:0x3b; 0x40:0x4b; 0x50:0x5b], 12, "Parallel Data"; threaded), 64)[2] == expected
+        @test parallelhash_xof_256([0x00:0x0b; 0x10:0x1b; 0x20:0x2b; 0x30:0x3b; 0x40:0x4b; 0x50:0x5b], 12, 64, "Parallel Data"; threaded) == expected
+        @test parallelhash_xof_256(String([0x00:0x0b; 0x10:0x1b; 0x20:0x2b; 0x30:0x3b; 0x40:0x4b; 0x50:0x5b]), 12, Val(64), codeunits("Parallel Data"); threaded) == Tuple(expected)
+    end
+
+    # above tests also cover `threaded=true`, but the data sizes are too small to actaully
+    # use more than one thread, so compare threaded vs. non-threaded for large, random data
+    if Threads.nthreads() == 1
+        @warn "Multi-threading disabled, threaded ParallelHash cannot be tested properly"
+    end
+    for blocksize in [135, 136, 152, 168, 272, 336]
+        for datalen in 128*blocksize .+ [-1, 0, 1]
+            data = rand(UInt8, datalen)
+            @test parallelhash_128(data, blocksize, 32; threaded=true) == parallelhash_128(data, blocksize, 32; threaded=false)
+            @test squeeze(parallelhash_xof_128(data, blocksize; threaded=true), 32)[2] == squeeze(parallelhash_xof_128(data, blocksize; threaded=false), 32)[2]
+            @test parallelhash_xof_128(data, blocksize, 32; threaded=true) == parallelhash_xof_128(data, blocksize, 32; threaded=false)
+
+            @test parallelhash_256(data, blocksize, 64; threaded=true) == parallelhash_256(data, blocksize, 64; threaded=false)
+            @test squeeze(parallelhash_xof_256(data, blocksize; threaded=true), 64)[2] == squeeze(parallelhash_xof_256(data, blocksize; threaded=false), 64)[2]
+            @test parallelhash_xof_256(data, blocksize, 64; threaded=true) == parallelhash_xof_256(data, blocksize, 64; threaded=false)
+        end
+    end
+end

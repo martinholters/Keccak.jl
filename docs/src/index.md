@@ -27,6 +27,10 @@ tuplehash_128
 tuplehash_256
 tuplehash_xof_128
 tuplehash_xof_256
+parallelhash_128
+parallelhash_256
+parallelhash_xof_128
+parallelhash_xof_256
 absorb
 pad
 squeeze
