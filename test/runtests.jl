@@ -541,6 +541,12 @@ end
 end
 
 @testset "cSHAKE" begin
+    # verify that cSHAKE with empty function-name and customization correctly falls back to SHAKE
+    @test cshake_128_sponge("", UInt8[]) == cshake_128_sponge(UInt8[]) == cshake_128_sponge() == shake_128_sponge()
+    @test cshake_128(0x00:0x03, 32, UInt8[], "") == cshake_128(0x00:0x03, 32, "") == cshake_128(0x00:0x03, 32) == shake_128(0x00:0x03, 32)
+    @test cshake_256_sponge("", UInt8[]) == cshake_256_sponge(UInt8[]) == cshake_256_sponge() == shake_256_sponge()
+    @test cshake_256(0x00:0x03, 32, UInt8[], "") == cshake_256(0x00:0x03, 32, "") == cshake_256(0x00:0x03, 32) == shake_256(0x00:0x03, 32)
+
     # https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/cSHAKE_samples.pdf
 
     # for each sample, test some subset of possible input type combinations
