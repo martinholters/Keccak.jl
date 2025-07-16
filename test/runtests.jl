@@ -837,7 +837,7 @@ end
         @test parallelhash_xof_256(String([0x00:0x0b; 0x10:0x1b; 0x20:0x2b; 0x30:0x3b; 0x40:0x4b; 0x50:0x5b]), 12, Val(64), codeunits("Parallel Data"); threaded) == Tuple(expected)
     end
 
-    # above tests also cover `threaded=true`, but the data sizes are too small to actaully
+    # above tests also cover `threaded=true`, but the data sizes are too small to actually
     # use more than one thread, so compare threaded vs. non-threaded for large, random data
     if Threads.nthreads() == 1
         @warn "Multi-threading disabled, threaded ParallelHash cannot be tested properly"
