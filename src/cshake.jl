@@ -13,7 +13,7 @@ for d in [128, 256]
         """
         function $(cshake_spongefunc)(N::AbsorbableData=(), S::AbsorbableData=())
             if isempty(N) && isempty(S)
-                return shake_128_sponge()
+                return $(Symbol("shake_$(d)_sponge"))()
             end
             sponge = KeccakSponge{$R,UInt64}(KeccakPad(0x04))
             sponge = absorb_ratepadded(sponge) do sponge
