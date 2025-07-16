@@ -544,7 +544,7 @@ end
     # https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/cSHAKE_samples.pdf
 
     # for each sample, test some subset of possible input type combinations
-    # more thourough testing (e.g. piece-wise input/output) is only done for SHAKE above
+    # more thorough testing (e.g. piece-wise input/output) is only done for SHAKE above
     # which uses the same underlying machinery
 
     # sample #1
