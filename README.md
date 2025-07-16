@@ -144,4 +144,18 @@ while some_condition
     # ... do something with the Cs, each holding three bytes ...
 end
 ```
+
+## Further Keccak-based hashes
+
+The hashing functions described in
+[SHA-3 Derived Functions: cSHAKE, KMAC, TupleHash and ParallelHash][NIST-SP-800-185]
+are available as
+* `cshake_128`, `cshake_128_sponge`, `cshake_256`, `cshake_256_sponge`
+* `kmac_128`, `kmac_xof_128`, `kmac_128_sponge`, `kmac_256, kmac_xof_256, kmac_256_sponge`
+* `tuplehash_128`, `tuplehash_xof_128`, `tuplehash_256`, `tuplehash_xof_256`
+* `parallelhash_128`, `parallelhash_xof_128`, `parallelhash_256`, `parallelhash_xof_256`
+
+See the respective docstrings for further information.
+
+[NIST-SP-800-185]: https://doi.org/10.6028/NIST.SP.800-185
 [NIST-FIPS-202]: https://doi.org/10.6028/NIST.FIPS.202
