@@ -539,3 +539,325 @@ end
         @test output == collect(shakefunc(input′..., len)) == [shakefunc(inp, len) for inp in input]
     end
 end
+
+@testset "cSHAKE" begin
+    # verify that cSHAKE with empty function-name and customization correctly falls back to SHAKE
+    @test cshake_128_sponge("", UInt8[]) == cshake_128_sponge(UInt8[]) == cshake_128_sponge() == shake_128_sponge()
+    @test cshake_128(0x00:0x03, 32, UInt8[], "") == cshake_128(0x00:0x03, 32, "") == cshake_128(0x00:0x03, 32) == shake_128(0x00:0x03, 32)
+    @test cshake_256_sponge("", UInt8[]) == cshake_256_sponge(UInt8[]) == cshake_256_sponge() == shake_256_sponge()
+    @test cshake_256(0x00:0x03, 32, UInt8[], "") == cshake_256(0x00:0x03, 32, "") == cshake_256(0x00:0x03, 32) == shake_256(0x00:0x03, 32)
+
+    # https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/cSHAKE_samples.pdf
+
+    # for each sample, test some subset of possible input type combinations
+    # more thorough testing (e.g. piece-wise input/output) is only done for SHAKE above
+    # which uses the same underlying machinery
+
+    # sample #1
+    expected = hex2bytes("C1C36925B6409A04F1B504FCBCA9D82B4017277CB5ED2B2065FC1D3814D5AAF5")
+    @test squeeze(pad(absorb(cshake_128_sponge("", "Email Signature"), 0x00:0x03)), 32)[2] == expected
+    @test squeeze(cshake_128(0x00:0x03, "", "Email Signature"), 32)[2] == expected
+    @test cshake_128(0x00:0x03, 32, "", "Email Signature") == expected
+    @test cshake_128(Tuple(0x00:0x03), 32, (), codeunits("Email Signature")) == expected
+    @test cshake_128(String(0x00:0x03), 32, UInt8[], "Email Signature") == expected
+    @test cshake_128(0x00:0x03, Val(32), "", "Email Signature") == Tuple(expected)
+    @test cshake_128(Tuple(0x00:0x03), Val(32), (), "Email Signature") == Tuple(expected)
+    @test cshake_128(String(0x00:0x03), Val(32), UInt8[], Tuple(codeunits("Email Signature"))) == Tuple(expected)
+
+    # sample #2
+    expected = hex2bytes("C5221D50E4F822D96A2E8881A961420F294B7B24FE3D2094BAED2C6524CC166B")
+    @test squeeze(pad(absorb(cshake_128_sponge("", "Email Signature"), 0x00:0xc7)), 32)[2] == expected
+    @test squeeze(cshake_128(0x00:0xc7, "", "Email Signature"), 32)[2] == expected
+    @test cshake_128(0x00:0xc7, 32, "", "Email Signature") == expected
+    @test cshake_128(String(0x00:0xc7), 32, (), "Email Signature") == expected
+    @test cshake_128(0x00:0xc7, Val(32), UInt8[], "Email Signature") == Tuple(expected)
+    @test cshake_128(String(0x00:0xc7), Val(32), "", codeunits("Email Signature")) == Tuple(expected)
+
+    # sample #3
+    expected = hex2bytes("D008828E2B80AC9D2218FFEE1D070C48B8E4C87BFF32C9699D5B6896EEE0EDD164020E2BE0560858D9C00C037E34A96937C561A74C412BB4C746469527281C8C")
+    @test squeeze(pad(absorb(cshake_256_sponge("", "Email Signature"), 0x00:0x03)), 64)[2] == expected
+    @test squeeze(cshake_256(0x00:0x03, "", "Email Signature"), 64)[2] == expected
+    @test cshake_256(0x00:0x03, 64, (), "Email Signature") == expected
+    @test cshake_256(Tuple(0x00:0x03), 64, UInt8[], "Email Signature") == expected
+    @test cshake_256(String(0x00:0x03), 64, "", codeunits("Email Signature")) == expected
+    @test cshake_256(0x00:0x03, Val(64), UInt8[], codeunits("Email Signature")) == Tuple(expected)
+    @test cshake_256(Tuple(0x00:0x03), Val(64), (), codeunits("Email Signature")) == Tuple(expected)
+    @test cshake_256(String(0x00:0x03), Val(64), "", "Email Signature") == Tuple(expected)
+
+    # sample #4
+    expected = hex2bytes("07DC27B11E51FBAC75BC7B3C1D983E8B4B85FB1DEFAF218912AC86430273091727F42B17ED1DF63E8EC118F04B23633C1DFB1574C8FB55CB45DA8E25AFB092BB")
+    @test squeeze(pad(absorb(cshake_256_sponge("", "Email Signature"), 0x00:0xc7)), 64)[2] == expected
+    @test squeeze(cshake_256(0x00:0xc7, "", "Email Signature"), 64)[2] == expected
+    @test cshake_256(0x00:0xc7, 64, "", Tuple(codeunits("Email Signature"))) == expected
+    @test cshake_256(0x00:0xc7, Val(64), "", "Email Signature") == Tuple(expected)
+end
+
+@testset "KMAC" begin
+    # https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/KMAC_samples.pdf
+
+    # sample #1
+    expected = hex2bytes("E5780B0D3EA6F7D3A429C5706AA43A00FADBD7D49628839E3187243F456EE14E")
+    @test squeeze(pad(absorb(kmac_128_sponge(0x40:0x5f, 32), 0x00:0x03)), 32)[2] == expected
+    @test kmac_128(0x40:0x5f, 0x00:0x03, 32, ()) == expected
+    @test kmac_128(String(0x40:0x5f), Tuple(0x00:0x03), 32) == expected
+    @test kmac_128(0x40:0x5f, 0x00:0x03, Val(32), UInt8[]) == Tuple(expected)
+    @test kmac_128(String(0x40:0x5f), Tuple(0x00:0x03), Val(32), "") == Tuple(expected)
+
+    # sample #2
+    expected = hex2bytes("3B1FBA963CD8B0B59E8C1A6D71888B7143651AF8BA0A7070C0979E2811324AA5")
+    @test squeeze(pad(absorb(kmac_128_sponge(0x40:0x5f, 32, "My Tagged Application"), 0x00:0x03)), 32)[2] == expected
+    @test kmac_128(0x40:0x5f, 0x00:0x03, 32, codeunits("My Tagged Application")) == expected
+    @test kmac_128(String(0x40:0x5f), Tuple(0x00:0x03), Val(32), "My Tagged Application") == Tuple(expected)
+
+    # sample #3
+    expected = hex2bytes("1F5B4E6CCA02209E0DCB5CA635B89A15E271ECC760071DFD805FAA38F9729230")
+    @test squeeze(pad(absorb(kmac_128_sponge(0x40:0x5f, 32, "My Tagged Application"), 0x00:0xc7)), 32)[2] == expected
+    @test kmac_128(0x40:0x5f, 0x00:0xc7, 32, "My Tagged Application") == expected
+    @test kmac_128(String(0x40:0x5f), String(0x00:0xc7), Val(32), codeunits("My Tagged Application")) == Tuple(expected)
+
+    # sample #4
+    expected = hex2bytes("20C570C31346F703C9AC36C61C03CB64C3970D0CFC787E9B79599D273A68D2F7F69D4CC3DE9D104A351689F27CF6F5951F0103F33F4F24871024D9C27773A8DD")
+    @test squeeze(pad(absorb(kmac_256_sponge(0x40:0x5f, 64, codeunits("My Tagged Application")), 0x00:0x03)), 64)[2] == expected
+    @test kmac_256(0x40:0x5f, 0x00:0x03, 64, "My Tagged Application") == expected
+    @test kmac_256(String(0x40:0x5f), Tuple(0x00:0x03), 64, "My Tagged Application") == expected
+    @test kmac_256(0x40:0x5f, 0x00:0x03, Val(64), codeunits("My Tagged Application")) == Tuple(expected)
+    @test kmac_256(String(0x40:0x5f), Tuple(0x00:0x03), Val(64), "My Tagged Application") == Tuple(expected)
+
+    # sample #5
+    expected = hex2bytes("75358CF39E41494E949707927CEE0AF20A3FF553904C86B08F21CC414BCFD691589D27CF5E15369CBBFF8B9A4C2EB17800855D0235FF635DA82533EC6B759B69")
+    @test squeeze(pad(absorb(kmac_256_sponge(0x40:0x5f, 64), 0x00:0xc7)), 64)[2] == expected
+    @test kmac_256(0x40:0x5f, 0x00:0xc7, 64) == expected
+    @test kmac_256(String(0x40:0x5f), Tuple(0x00:0xc7), Val(64), UInt8[]) == Tuple(expected)
+
+    # sample #6
+    expected = hex2bytes("B58618F71F92E1D56C1B8C55DDD7CD188B97B4CA4D99831EB2699A837DA2E4D970FBACFDE50033AEA585F1A2708510C32D07880801BD182898FE476876FC8965")
+    @test squeeze(pad(absorb(kmac_256_sponge(0x40:0x5f, 64, "My Tagged Application"), 0x00:0xc7)), 64)[2] == expected
+    @test kmac_256(0x40:0x5f, 0x00:0xc7, 64, "My Tagged Application") == expected
+    @test kmac_256(String(0x40:0x5f), String(0x00:0xc7), Val(64), codeunits("My Tagged Application")) == Tuple(expected)
+
+    # https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/KMACXOF_samples.pdf
+
+    # sample #1
+    expected = hex2bytes("CD83740BBD92CCC8CF032B1481A0F4460E7CA9DD12B08A0C4031178BACD6EC35")
+    @test squeeze(pad(absorb(kmac_128_sponge(0x40:0x5f, 0), 0x00:0x03)), 32)[2] == expected
+    @test squeeze(kmac_xof_128(0x40:0x5f, 0x00:0x03), Val(32))[2] == Tuple(expected)
+    @test kmac_xof_128(0x40:0x5f, 0x00:0x03, 32, "") == expected
+    @test kmac_xof_128(String(0x40:0x5f), Tuple(0x00:0x03), Val(32), UInt8[]) == Tuple(expected)
+
+    # sample #2
+    expected = hex2bytes("31A44527B4ED9F5C6101D11DE6D26F0620AA5C341DEF41299657FE9DF1A3B16C")
+    @test squeeze(pad(absorb(kmac_128_sponge(0x40:0x5f, 0, "My Tagged Application"), 0x00:0x03)), 32)[2] == expected
+    @test squeeze(kmac_xof_128(0x40:0x5f, Tuple(0x00:0x03), "My Tagged Application"), Val(32))[2] == Tuple(expected)
+    @test kmac_xof_128(0x40:0x5f, 0x00:0x03, 32, codeunits("My Tagged Application")) == expected
+    @test kmac_xof_128(String(0x40:0x5f), Tuple(0x00:0x03), Val(32), "My Tagged Application") == Tuple(expected)
+
+    # sample #3
+    expected = hex2bytes("47026C7CD793084AA0283C253EF658490C0DB61438B8326FE9BDDF281B83AE0F")
+    @test squeeze(pad(absorb(kmac_128_sponge(0x40:0x5f, 0, codeunits("My Tagged Application")), 0x00:0xc7)), 32)[2] == expected
+    @test squeeze(kmac_xof_128(String(0x40:0x5f), 0x00:0xc7, codeunits("My Tagged Application")), Val(32))[2] == Tuple(expected)
+    @test kmac_xof_128(0x40:0x5f, 0x00:0xc7, 32, Tuple(codeunits("My Tagged Application"))) == expected
+    @test kmac_xof_128(String(0x40:0x5f), 0x00:0xc7, Val(32), "My Tagged Application") == Tuple(expected)
+
+    # sample #4
+    expected = hex2bytes("1755133F1534752AAD0748F2C706FB5C784512CAB835CD15676B16C0C6647FA96FAA7AF634A0BF8FF6DF39374FA00FAD9A39E322A7C92065A64EB1FB0801EB2B")
+    @test squeeze(pad(absorb(kmac_256_sponge(0x40:0x5f, 0, "My Tagged Application"), 0x00:0x03)), 64)[2] == expected
+    @test squeeze(kmac_xof_256(0x40:0x5f, String(0x00:0x03), Tuple(codeunits("My Tagged Application"))), Val(64))[2] == Tuple(expected)
+    @test kmac_xof_256(0x40:0x5f, 0x00:0x03, 64, codeunits("My Tagged Application")) == expected
+    @test kmac_xof_256(String(0x40:0x5f), Tuple(0x00:0x03), Val(64), "My Tagged Application") == Tuple(expected)
+
+    # sample #5
+    expected = hex2bytes("FF7B171F1E8A2B24683EED37830EE797538BA8DC563F6DA1E667391A75EDC02CA633079F81CE12A25F45615EC89972031D18337331D24CEB8F8CA8E6A19FD98B")
+    @test squeeze(pad(absorb(kmac_256_sponge(0x40:0x5f, 0, ""), 0x00:0xc7)), 64)[2] == expected
+    @test squeeze(kmac_xof_256(0x40:0x5f, String(0x00:0xc7)), Val(64))[2] == Tuple(expected)
+    @test kmac_xof_256(0x40:0x5f, 0x00:0xc7, 64, UInt8[]) == expected
+    @test kmac_xof_256(String(0x40:0x5f), Tuple(0x00:0xc7), Val(64), ()) == Tuple(expected)
+
+    # sample #6
+    expected = hex2bytes("D5BE731C954ED7732846BB59DBE3A8E30F83E77A4BFF4459F2F1C2B4ECEBB8CE67BA01C62E8AB8578D2D499BD1BB276768781190020A306A97DE281DCC30305D")
+    @test squeeze(pad(absorb(kmac_256_sponge(0x40:0x5f, 0, Tuple(codeunits("My Tagged Application"))), 0x00:0xc7)), 64)[2] == expected
+    @test squeeze(kmac_xof_256(0x40:0x5f, String(0x00:0xc7), "My Tagged Application"), Val(64))[2] == Tuple(expected)
+    @test kmac_xof_256(0x40:0x5f, 0x00:0xc7, 64, "My Tagged Application") == expected
+    @test kmac_xof_256(String(0x40:0x5f), Tuple(0x00:0xc7), Val(64), "My Tagged Application") == Tuple(expected)
+end
+
+@testset "TupleHash" begin
+    # https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/TupleHash_samples.pdf
+
+    # sample 1
+    expected = hex2bytes("C5D8786C1AFB9B82111AB34B65B2C0048FA64E6D48E263264CE1707D3FFC8ED1")
+    @test tuplehash_128((0x00:0x02, 0x10:0x15), 32) == expected
+    @test tuplehash_128([0x00:0x02, String(0x10:0x15)], Val(32)) == Tuple(expected)
+    @test tuplehash_128((Tuple(0x00:0x02), 0x10:0x15), 32, "") == expected
+
+    # sample 2
+    expected = hex2bytes("75CDB20FF4DB1154E841D758E24160C54BAE86EB8C13E7F5F40EB35588E96DFB")
+    @test tuplehash_128((0x00:0x02, 0x10:0x15), 32, "My Tuple App") == expected
+    @test tuplehash_128([x for x in [0x00:0x02, String(0x10:0x15)]], Val(32), codeunits("My Tuple App")) == Tuple(expected)
+    @test tuplehash_128((Tuple(0x00:0x02), 0x10:0x15), 32, Tuple(codeunits("My Tuple App"))) == expected
+
+    # sample 3
+    expected = hex2bytes("E60F202C89A2631EDA8D4C588CA5FD07F39E5151998DECCF973ADB3804BB6E84")
+    @test tuplehash_128((0x00:0x02, 0x10:0x15, 0x20:0x28), 32, "My Tuple App") == expected
+    @test tuplehash_128([0x00:0x02, String(0x10:0x15), Tuple(0x20:0x28)], Val(32), codeunits("My Tuple App")) == Tuple(expected)
+    @test tuplehash_128([Tuple(0x00:0x02), 0x10:0x15, String(0x20:0x28)], 32, Tuple(codeunits("My Tuple App"))) == expected
+
+    # sample 4
+    expected = hex2bytes("CFB7058CACA5E668F81A12A20A2195CE97A925F1DBA3E7449A56F82201EC607311AC2696B1AB5EA2352DF1423BDE7BD4BB78C9AED1A853C78672F9EB23BBE194")
+    @test tuplehash_256([0x00:0x02, 0x10:0x15], 64) == expected
+    @test tuplehash_256((0x00:0x02, String(0x10:0x15)), Val(64), UInt8[]) == Tuple(expected)
+    @test tuplehash_256([Tuple(0x00:0x02), 0x10:0x15], 64, "") == expected
+
+    # sample 5
+    expected = hex2bytes("147C2191D5ED7EFD98DBD96D7AB5A11692576F5FE2A5065F3E33DE6BBA9F3AA1C4E9A068A289C61C95AAB30AEE1E410B0B607DE3620E24A4E3BF9852A1D4367E")
+    @test tuplehash_256((0x00:0x02, 0x10:0x15), 64, "My Tuple App") == expected
+    @test tuplehash_256([0x00:0x02, String(0x10:0x15)], Val(64), codeunits("My Tuple App")) == Tuple(expected)
+    @test tuplehash_256((Tuple(0x00:0x02), String(0x10:0x15)), 64, Tuple(codeunits("My Tuple App"))) == expected
+
+    # sample 6
+    expected = hex2bytes("45000BE63F9B6BFD89F54717670F69A9BC763591A4F05C50D68891A744BCC6E7D6D5B5E82C018DA999ED35B0BB49C9678E526ABD8E85C13ED254021DB9E790CE")
+    @test tuplehash_256([0x00:0x02, 0x10:0x15, Tuple(0x20:0x28)], 64, Tuple(codeunits("My Tuple App"))) == expected
+    @test tuplehash_256((0x00:0x02, String(0x10:0x15), 0x20:0x28), Val(64), "My Tuple App") == Tuple(expected)
+    @test tuplehash_256([x for x in [Tuple(0x00:0x02), 0x10:0x15, String(0x20:0x28)]], 64, codeunits("My Tuple App")) == expected
+
+    # https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/TupleHashXOF_samples.pdf
+
+    # sample 1
+    expected = hex2bytes("2F103CD7C32320353495C68DE1A8129245C6325F6F2A3D608D92179C96E68488")
+    @test squeeze(tuplehash_xof_128((0x00:0x02, 0x10:0x15)), 32)[2] == expected
+    @test squeeze(tuplehash_xof_128([0x00:0x02, 0x10:0x15], ""), 32)[2] == expected
+    @test tuplehash_xof_128((0x00:0x02, 0x10:0x15), 32) == expected
+    @test tuplehash_xof_128([0x00:0x02, String(0x10:0x15)], Val(32)) == Tuple(expected)
+    @test tuplehash_xof_128((Tuple(0x00:0x02), 0x10:0x15), 32, "") == expected
+
+    # sample 2
+    expected = hex2bytes("3FC8AD69453128292859A18B6C67D7AD85F01B32815E22CE839C49EC374E9B9A")
+    @test squeeze(tuplehash_xof_128((0x00:0x02, 0x10:0x15), "My Tuple App"), 32)[2] == expected
+    @test squeeze(tuplehash_xof_128((String(0x00:0x02), 0x10:0x15), codeunits("My Tuple App")), 32)[2] == expected
+    @test tuplehash_xof_128((0x00:0x02, 0x10:0x15), 32, codeunits("My Tuple App")) == expected
+    @test tuplehash_xof_128([0x00:0x02, String(0x10:0x15)], Val(32), Tuple(codeunits("My Tuple App"))) == Tuple(expected)
+    @test tuplehash_xof_128((Tuple(0x00:0x02), 0x10:0x15), 32, "My Tuple App") == expected
+
+    # sample 3
+    expected = hex2bytes("900FE16CAD098D28E74D632ED852F99DAAB7F7DF4D99E775657885B4BF76D6F8")
+    @test squeeze(tuplehash_xof_128([0x00:0x02, Tuple(0x10:0x15), String(0x20:0x28)], "My Tuple App"), 32)[2] == expected
+    @test squeeze(tuplehash_xof_128((0x00:0x02, 0x10:0x15, 0x20:0x28), codeunits("My Tuple App")), 32)[2] == expected
+    @test tuplehash_xof_128((0x00:0x02, 0x10:0x15, 0x20:0x28), 32, codeunits("My Tuple App")) == expected
+    @test tuplehash_xof_128([d for d in [0x00:0x02, String(0x10:0x15), 0x20:0x28]], Val(32), Tuple(codeunits("My Tuple App"))) == Tuple(expected)
+    @test tuplehash_xof_128((Tuple(0x00:0x02), 0x10:0x15, 0x20:0x28), 32, "My Tuple App") == expected
+
+    # sample 4
+    expected = hex2bytes("03DED4610ED6450A1E3F8BC44951D14FBC384AB0EFE57B000DF6B6DF5AAE7CD568E77377DAF13F37EC75CF5FC598B6841D51DD207C991CD45D210BA60AC52EB9")
+    @test squeeze(tuplehash_xof_256((0x00:0x02, 0x10:0x15)), 64)[2] == expected
+    @test squeeze(tuplehash_xof_256([0x00:0x02, 0x10:0x15], ""), 64)[2] == expected
+    @test tuplehash_xof_256((0x00:0x02, 0x10:0x15), 64) == expected
+    @test tuplehash_xof_256([0x00:0x02, String(0x10:0x15)], Val(64)) == Tuple(expected)
+    @test tuplehash_xof_256((Tuple(0x00:0x02), 0x10:0x15), 64, "") == expected
+
+    # sample 5
+    expected = hex2bytes("6483CB3C9952EB20E830AF4785851FC597EE3BF93BB7602C0EF6A65D741AECA7E63C3B128981AA05C6D27438C79D2754BB1B7191F125D6620FCA12CE658B2442")
+    @test squeeze(tuplehash_xof_256((0x00:0x02, 0x10:0x15), "My Tuple App"), 64)[2] == expected
+    @test squeeze(tuplehash_xof_256((String(0x00:0x02), 0x10:0x15), codeunits("My Tuple App")), 64)[2] == expected
+    @test tuplehash_xof_256((0x00:0x02, 0x10:0x15), 64, codeunits("My Tuple App")) == expected
+    @test tuplehash_xof_256([0x00:0x02, String(0x10:0x15)], Val(64), Tuple(codeunits("My Tuple App"))) == Tuple(expected)
+    @test tuplehash_xof_256((Tuple(0x00:0x02), 0x10:0x15), 64, "My Tuple App") == expected
+
+    # sample 6
+    expected = hex2bytes("0C59B11464F2336C34663ED51B2B950BEC743610856F36C28D1D088D8A2446284DD09830A6A178DC752376199FAE935D86CFDEE5913D4922DFD369B66A53C897")
+    @test squeeze(tuplehash_xof_256([0x00:0x02, Tuple(0x10:0x15), String(0x20:0x28)], "My Tuple App"), 64)[2] == expected
+    @test squeeze(tuplehash_xof_256((0x00:0x02, 0x10:0x15, 0x20:0x28), codeunits("My Tuple App")), 64)[2] == expected
+    @test tuplehash_xof_256((0x00:0x02, 0x10:0x15, 0x20:0x28), 64, codeunits("My Tuple App")) == expected
+    @test tuplehash_xof_256([d for d in [0x00:0x02, String(0x10:0x15), 0x20:0x28]], Val(64), Tuple(codeunits("My Tuple App"))) == Tuple(expected)
+    @test tuplehash_xof_256((Tuple(0x00:0x02), 0x10:0x15, 0x20:0x28), 64, "My Tuple App") == expected
+end
+
+@testset "ParallelHash" begin
+    for threaded in [false, true]
+        # https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/ParallelHash_samples.pdf
+
+        # sample 1
+        expected = hex2bytes("BA8DC1D1D979331D3F813603C67F72609AB5E44B94A0B8F9AF46514454A2B4F5")
+        @test parallelhash_128([0x00:0x07; 0x10:0x17; 0x20:0x27], 8, 32; threaded) == expected
+        @test parallelhash_128(String([0x00:0x07; 0x10:0x17; 0x20:0x27]), 8, Val(32); threaded) == Tuple(expected)
+
+        # sample 2
+        expected = hex2bytes("FC484DCB3F84DCEEDC353438151BEE58157D6EFED0445A81F165E495795B7206")
+        @test parallelhash_128(String([0x00:0x07; 0x10:0x17; 0x20:0x27]), 8, 32, "Parallel Data"; threaded) == expected
+        @test parallelhash_128([0x00:0x07; 0x10:0x17; 0x20:0x27], 8, Val(32), codeunits("Parallel Data"); threaded) == Tuple(expected)
+
+        # sample 3
+        expected = hex2bytes("F7FD5312896C6685C828AF7E2ADB97E393E7F8D54E3C2EA4B95E5ACA3796E8FC")
+        @test parallelhash_128([0x00:0x0b; 0x10:0x1b; 0x20:0x2b; 0x30:0x3b; 0x40:0x4b; 0x50:0x5b], 12, 32, "Parallel Data"; threaded) == expected
+        @test parallelhash_128(String([0x00:0x0b; 0x10:0x1b; 0x20:0x2b; 0x30:0x3b; 0x40:0x4b; 0x50:0x5b]), 12, Val(32), codeunits("Parallel Data"); threaded) == Tuple(expected)
+
+        # sample 1 (sic!)
+        expected = hex2bytes("BC1EF124DA34495E948EAD207DD9842235DA432D2BBC54B4C110E64C451105531B7F2A3E0CE055C02805E7C2DE1FB746AF97A1DD01F43B824E31B87612410429")
+        @test parallelhash_256(String([0x00:0x07; 0x10:0x17; 0x20:0x27]), 8, 64; threaded) == expected
+        @test parallelhash_256([0x00:0x07; 0x10:0x17; 0x20:0x27], 8, Val(64); threaded) == Tuple(expected)
+
+        # sample 2
+        expected = hex2bytes("CDF15289B54F6212B4BC270528B49526006DD9B54E2B6ADD1EF6900DDA3963BB33A72491F236969CA8AFAEA29C682D47A393C065B38E29FAE651A2091C833110")
+        @test parallelhash_256(String([0x00:0x07; 0x10:0x17; 0x20:0x27]), 8, 64, "Parallel Data"; threaded) == expected
+        @test parallelhash_256([0x00:0x07; 0x10:0x17; 0x20:0x27], 8, Val(64), codeunits("Parallel Data"); threaded) == Tuple(expected)
+
+        # sample 3
+        expected = hex2bytes("69D0FCB764EA055DD09334BC6021CB7E4B61348DFF375DA262671CDEC3EFFA8D1B4568A6CCE16B1CAD946DDDE27F6CE2B8DEE4CD1B24851EBF00EB90D43813E9")
+        @test parallelhash_256([0x00:0x0b; 0x10:0x1b; 0x20:0x2b; 0x30:0x3b; 0x40:0x4b; 0x50:0x5b], 12, 64, "Parallel Data"; threaded) == expected
+        @test parallelhash_256(String([0x00:0x0b; 0x10:0x1b; 0x20:0x2b; 0x30:0x3b; 0x40:0x4b; 0x50:0x5b]), 12, Val(64), codeunits("Parallel Data"); threaded) == Tuple(expected)
+
+        # https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/ParallelHashXOF_samples.pdf
+
+        # sample 1
+        expected = hex2bytes("FE47D661E49FFE5B7D999922C062356750CAF552985B8E8CE6667F2727C3C8D3")
+        @test squeeze(parallelhash_xof_128([0x00:0x07; 0x10:0x17; 0x20:0x27], 8; threaded), 32)[2] == expected
+        @test parallelhash_xof_128([0x00:0x07; 0x10:0x17; 0x20:0x27], 8, 32; threaded) == expected
+        @test parallelhash_xof_128(String([0x00:0x07; 0x10:0x17; 0x20:0x27]), 8, Val(32); threaded) == Tuple(expected)
+
+        # sample 2
+        expected = hex2bytes("EA2A793140820F7A128B8EB70A9439F93257C6E6E79B4A540D291D6DAE7098D7")
+        @test squeeze(parallelhash_xof_128(String([0x00:0x07; 0x10:0x17; 0x20:0x27]), 8, "Parallel Data"; threaded), 32)[2] == expected
+        @test parallelhash_xof_128(String([0x00:0x07; 0x10:0x17; 0x20:0x27]), 8, 32, "Parallel Data"; threaded) == expected
+        @test parallelhash_xof_128([0x00:0x07; 0x10:0x17; 0x20:0x27], 8, Val(32), codeunits("Parallel Data"); threaded) == Tuple(expected)
+
+        # sample 3
+        expected = hex2bytes("0127AD9772AB904691987FCC4A24888F341FA0DB2145E872D4EFD255376602F0")
+        @test squeeze(parallelhash_xof_128([0x00:0x0b; 0x10:0x1b; 0x20:0x2b; 0x30:0x3b; 0x40:0x4b; 0x50:0x5b], 12, "Parallel Data"; threaded), 32)[2] == expected
+        @test parallelhash_xof_128([0x00:0x0b; 0x10:0x1b; 0x20:0x2b; 0x30:0x3b; 0x40:0x4b; 0x50:0x5b], 12, 32, "Parallel Data"; threaded) == expected
+        @test parallelhash_xof_128(String([0x00:0x0b; 0x10:0x1b; 0x20:0x2b; 0x30:0x3b; 0x40:0x4b; 0x50:0x5b]), 12, Val(32), codeunits("Parallel Data"); threaded) == Tuple(expected)
+
+        # sample 1 (sic!)
+        expected = hex2bytes("C10A052722614684144D28474850B410757E3CBA87651BA167A5CBDDFF7F466675FBF84BCAE7378AC444BE681D729499AFCA667FB879348BFDDA427863C82F1C")
+        @test squeeze(parallelhash_xof_256(String([0x00:0x07; 0x10:0x17; 0x20:0x27]), 8; threaded), 64)[2] == expected
+        @test parallelhash_xof_256(String([0x00:0x07; 0x10:0x17; 0x20:0x27]), 8, 64; threaded) == expected
+        @test parallelhash_xof_256([0x00:0x07; 0x10:0x17; 0x20:0x27], 8, Val(64); threaded) == Tuple(expected)
+
+        # sample 2
+        expected = hex2bytes("538E105F1A22F44ED2F5CC1674FBD40BE803D9C99BF5F8D90A2C8193F3FE6EA768E5C1A20987E2C9C65FEBED03887A51D35624ED12377594B5585541DC377EFC")
+        @test squeeze(parallelhash_xof_256(String([0x00:0x07; 0x10:0x17; 0x20:0x27]), 8, "Parallel Data"; threaded), 64)[2] == expected
+        @test parallelhash_xof_256(String([0x00:0x07; 0x10:0x17; 0x20:0x27]), 8, 64, "Parallel Data"; threaded) == expected
+        @test parallelhash_xof_256([0x00:0x07; 0x10:0x17; 0x20:0x27], 8, Val(64), codeunits("Parallel Data"); threaded) == Tuple(expected)
+
+        # sample 3
+        expected = hex2bytes("6B3E790B330C889A204C2FBC728D809F19367328D852F4002DC829F73AFD6BCEFB7FE5B607B13A801C0BE5C1170BDB794E339458FDB0E62A6AF3D42558970249")
+        @test squeeze(parallelhash_xof_256([0x00:0x0b; 0x10:0x1b; 0x20:0x2b; 0x30:0x3b; 0x40:0x4b; 0x50:0x5b], 12, "Parallel Data"; threaded), 64)[2] == expected
+        @test parallelhash_xof_256([0x00:0x0b; 0x10:0x1b; 0x20:0x2b; 0x30:0x3b; 0x40:0x4b; 0x50:0x5b], 12, 64, "Parallel Data"; threaded) == expected
+        @test parallelhash_xof_256(String([0x00:0x0b; 0x10:0x1b; 0x20:0x2b; 0x30:0x3b; 0x40:0x4b; 0x50:0x5b]), 12, Val(64), codeunits("Parallel Data"); threaded) == Tuple(expected)
+    end
+
+    # above tests also cover `threaded=true`, but the data sizes are too small to actually
+    # use more than one thread, so compare threaded vs. non-threaded for large, random data
+    if Threads.nthreads() == 1
+        @warn "Multi-threading disabled, threaded ParallelHash cannot be tested properly"
+    end
+    for blocksize in [135, 136, 152, 168, 272, 336]
+        for datalen in 128*blocksize .+ [-1, 0, 1]
+            data = rand(UInt8, datalen)
+            @test parallelhash_128(data, blocksize, 32; threaded=true) == parallelhash_128(data, blocksize, 32; threaded=false)
+            @test squeeze(parallelhash_xof_128(data, blocksize; threaded=true), 32)[2] == squeeze(parallelhash_xof_128(data, blocksize; threaded=false), 32)[2]
+            @test parallelhash_xof_128(data, blocksize, 32; threaded=true) == parallelhash_xof_128(data, blocksize, 32; threaded=false)
+
+            @test parallelhash_256(data, blocksize, 64; threaded=true) == parallelhash_256(data, blocksize, 64; threaded=false)
+            @test squeeze(parallelhash_xof_256(data, blocksize; threaded=true), 64)[2] == squeeze(parallelhash_xof_256(data, blocksize; threaded=false), 64)[2]
+            @test parallelhash_xof_256(data, blocksize, 64; threaded=true) == parallelhash_xof_256(data, blocksize, 64; threaded=false)
+        end
+    end
+end
