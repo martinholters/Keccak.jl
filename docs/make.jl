@@ -18,4 +18,5 @@ makedocs(
 
 deploydocs(
     repo = "github.com/martinholters/Keccak.jl.git",
+    push_preview = true,
 )
