@@ -1,10 +1,13 @@
 # Keccak.jl - Keccak-based hashing (SHA3, SHAKE, ...)
 
+[![Docs dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://martinholters.github.io/Keccak.jl/dev/)
 [![CI](https://github.com/martinholters/Keccak.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/martinholters/Keccak.jl/actions/workflows/ci.yml)
 
 See the
 [SHA-3 Standard: Permutation-Based Hash and Extendable-Output Functions][NIST-FIPS-202]
-for details on the algorithms implemented in this package.
+for details on the algorithms implemented in this package and the
+[package documentation](https://martinholters.github.io/Keccak.jl/dev/) for more detailed
+usage information.
 
 ## Basic usage
 
@@ -155,7 +158,9 @@ are available as
 * `tuplehash_128`, `tuplehash_xof_128`, `tuplehash_256`, `tuplehash_xof_256`
 * `parallelhash_128`, `parallelhash_xof_128`, `parallelhash_256`, `parallelhash_xof_256`
 
-See the respective docstrings for further information.
+See the respective docstrings and the
+[package documentation](https://martinholters.github.io/Keccak.jl/dev/sp800-185/)
+for further information.
 
 [NIST-SP-800-185]: https://doi.org/10.6028/NIST.SP.800-185
 [NIST-FIPS-202]: https://doi.org/10.6028/NIST.FIPS.202
