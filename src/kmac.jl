@@ -26,7 +26,7 @@ for d in [128, 256]
         function $(kmacxoffunc) end
 
         """
-            $($(kmac_spongefunc))(K, len, S=())
+            $($(kmac_spongefunc))(K, len=0, S=())
 
         Creates a sponge for computing the Kᴇᴄᴄᴀᴋ Message Authentication Code (KMAC$($(d)))
         using key `K` and (optional) customization string `S`. The length `len` (in bytes)

@@ -38,7 +38,7 @@ be `0b00000110 == 0x06`, and the corresponding padding function would be instant
 """
 struct KeccakPad
     firstbyte::UInt8
-    function KeccakPad(firstbyte)
+    function KeccakPad(firstbyte=0x01)
         if !(0x01 <= firstbyte <= 0xf7)
             throw(ArgumentError("invalid first byte of padding"))
         end
