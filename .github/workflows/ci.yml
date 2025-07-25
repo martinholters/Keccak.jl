@@ -10,6 +10,7 @@ jobs:
     permissions:
       actions: write
       contents: read
+      # The id-token: write permission is required for Codecov's OIDC authentication.
       id-token: write
     runs-on: ${{ matrix.os }}
     strategy:
