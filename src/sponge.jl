@@ -66,11 +66,8 @@ rate(::Sponge{R,NTuple{K,T}}) where {R,K,ELT<:Unsigned,T<:Union{ELT,Vec{<:Any,EL
 ) where {blocklen}
     ntuple(Val(blocklen)) do i
         @inline
-        if !checkindex(Bool, eachindex(data), i-1-destoffset+srcoffset+firstindex(data))
-            return 0x00
-        else
-            return data[i-1-destoffset+srcoffset+firstindex(data)]
-        end
+        j = i-1-destoffset+srcoffset+firstindex(data)
+        return checkindex(Bool, eachindex(data), j) ? data[j] : 0x00
     end
 end
 
