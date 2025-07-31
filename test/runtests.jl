@@ -435,6 +435,14 @@ end
 
         @test squeeze(pad(sp), Val(d÷8))[2] == shafunc(input′...) == Tuple(shafunc(inp) for inp in input)
     end
+
+    # test error path for inputs of different size
+    # note: the implementation may conceivably be changed to allow this, but for now
+    # verify that it throws the correct error instead of producing bogus results
+    @test_throws DimensionMismatch shafunc(rand(UInt8, 23), rand(UInt8, 42))
+    @test_throws DimensionMismatch shafunc(rand(UInt8, 23), rand(UInt8, 42), rand(UInt8, 23))
+    @test_throws DimensionMismatch shafunc(rand(UInt8, 23), rand(UInt8, 23), rand(UInt8, 42))
+    @test_throws DimensionMismatch shafunc(rand(UInt8, 23), rand(UInt8, 42), rand(UInt8, 42))
 end
 
 @testset "SHAKE-$d" for (d, shakefunc, spongefunc, empty_ref, len1600_ref) in [
@@ -549,6 +557,14 @@ end
         end
         @test output == collect(shakefunc(input′..., len)) == [shakefunc(inp, len) for inp in input]
     end
+
+    # test error path for inputs of different size
+    # note: the implementation may conceivably be changed to allow this, but for now
+    # verify that it throws the correct error instead of producing bogus results
+    @test_throws DimensionMismatch shakefunc(rand(UInt8, 23), rand(UInt8, 42))
+    @test_throws DimensionMismatch shakefunc(rand(UInt8, 23), rand(UInt8, 42), rand(UInt8, 23))
+    @test_throws DimensionMismatch shakefunc(String(rand(UInt8, 23)), String(rand(UInt8, 23)), String(rand(UInt8, 42)))
+    @test_throws DimensionMismatch shakefunc(Tuple(rand(UInt8, 23)), Tuple(rand(UInt8, 42)), Tuple(rand(UInt8, 42)))
 end
 
 @testset "cSHAKE" begin
