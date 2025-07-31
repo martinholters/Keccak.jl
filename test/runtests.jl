@@ -567,6 +567,21 @@ end
     @test_throws DimensionMismatch shakefunc(Tuple(rand(UInt8, 23)), Tuple(rand(UInt8, 42)), Tuple(rand(UInt8, 42)))
 end
 
+@testset "SP 800-185 helpers" begin
+    # test absorbing into a SHAKE-128 is equivalent
+    sponge = shake_128_sponge()
+    # only test data from the standard
+    @test absorb(sponge, (0x00, 0x01)) == Keccak.absorb_right_encoded(sponge, 0)
+    @test absorb(sponge, (0x01, 0x00)) == Keccak.absorb_left_encoded(sponge, 0)
+    for n in 1:8
+        # now use random data, hoping for no mis-interpretation of the standard
+        data = rand(UInt8, n)
+        x = sum(UInt64(data[i]) << (8 * (n - i)) for i in 1:n)
+        @test absorb(sponge, [data; UInt8(n)]) == Keccak.absorb_right_encoded(sponge, x)
+        @test absorb(sponge, [UInt8(n); data]) == Keccak.absorb_left_encoded(sponge, x)
+    end
+end
+
 @testset "cSHAKE" begin
     # verify that cSHAKE with empty function-name and customization correctly falls back to SHAKE
     @test cshake_128_sponge("", UInt8[]) == cshake_128_sponge(UInt8[]) == cshake_128_sponge() == shake_128_sponge()
