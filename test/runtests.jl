@@ -681,6 +681,7 @@ end
 
     # sample #1
     expected = hex2bytes("CD83740BBD92CCC8CF032B1481A0F4460E7CA9DD12B08A0C4031178BACD6EC35")
+    @test squeeze(pad(absorb(kmac_128_sponge(0x40:0x5f), 0x00:0x03)), 32)[2] == expected
     @test squeeze(pad(absorb(kmac_128_sponge(0x40:0x5f, 0), 0x00:0x03)), 32)[2] == expected
     @test squeeze(kmac_xof_128(0x40:0x5f, 0x00:0x03), Val(32))[2] == Tuple(expected)
     @test kmac_xof_128(0x40:0x5f, 0x00:0x03, 32, "") == expected
@@ -688,6 +689,7 @@ end
 
     # sample #2
     expected = hex2bytes("31A44527B4ED9F5C6101D11DE6D26F0620AA5C341DEF41299657FE9DF1A3B16C")
+    @test squeeze(pad(absorb(kmac_128_sponge(0x40:0x5f, "My Tagged Application"), 0x00:0x03)), 32)[2] == expected
     @test squeeze(pad(absorb(kmac_128_sponge(0x40:0x5f, 0, "My Tagged Application"), 0x00:0x03)), 32)[2] == expected
     @test squeeze(kmac_xof_128(0x40:0x5f, Tuple(0x00:0x03), "My Tagged Application"), Val(32))[2] == Tuple(expected)
     @test kmac_xof_128(0x40:0x5f, 0x00:0x03, 32, codeunits("My Tagged Application")) == expected
@@ -702,13 +704,14 @@ end
 
     # sample #4
     expected = hex2bytes("1755133F1534752AAD0748F2C706FB5C784512CAB835CD15676B16C0C6647FA96FAA7AF634A0BF8FF6DF39374FA00FAD9A39E322A7C92065A64EB1FB0801EB2B")
-    @test squeeze(pad(absorb(kmac_256_sponge(0x40:0x5f, 0, "My Tagged Application"), 0x00:0x03)), 64)[2] == expected
+    @test squeeze(pad(absorb(kmac_256_sponge(0x40:0x5f, "My Tagged Application"), 0x00:0x03)), 64)[2] == expected
     @test squeeze(kmac_xof_256(0x40:0x5f, String(0x00:0x03), Tuple(codeunits("My Tagged Application"))), Val(64))[2] == Tuple(expected)
     @test kmac_xof_256(0x40:0x5f, 0x00:0x03, 64, codeunits("My Tagged Application")) == expected
     @test kmac_xof_256(String(0x40:0x5f), Tuple(0x00:0x03), Val(64), "My Tagged Application") == Tuple(expected)
 
     # sample #5
     expected = hex2bytes("FF7B171F1E8A2B24683EED37830EE797538BA8DC563F6DA1E667391A75EDC02CA633079F81CE12A25F45615EC89972031D18337331D24CEB8F8CA8E6A19FD98B")
+    @test squeeze(pad(absorb(kmac_256_sponge(0x40:0x5f), 0x00:0xc7)), 64)[2] == expected
     @test squeeze(pad(absorb(kmac_256_sponge(0x40:0x5f, 0, ""), 0x00:0xc7)), 64)[2] == expected
     @test squeeze(kmac_xof_256(0x40:0x5f, String(0x00:0xc7)), Val(64))[2] == Tuple(expected)
     @test kmac_xof_256(0x40:0x5f, 0x00:0xc7, 64, UInt8[]) == expected
