@@ -333,6 +333,12 @@ end
     end
     sponge = Keccak.pad(sponge)
     @test Keccak.squeeze(sponge, length(len1600_ref))[2] == len1600_ref
+
+    # trying to create invalid KeccakPad
+    @test_throws ArgumentError KeccakPad(0x00)
+    @test_throws ArgumentError KeccakPad(0x80)
+    @test_throws ArgumentError KeccakPad(200)
+    @test_throws ArgumentError KeccakPad(-1)
 end
 
 @testset "SHA3-$d" for (d, shafunc, spongefunc, empty_ref, len1600_ref) in [
