@@ -1,7 +1,12 @@
+import Aqua
 using Keccak
 using OffsetArrays: Origin
 using SIMD: Vec
 using Test: @test, @test_throws, @testset
+
+@testset "Aqua.jl" begin
+    Aqua.test_all(Keccak)
+end
 
 @testset "Sponge" begin
     @testset "identity sponge" for intype in [identity, Tuple, String], maybe_val in [identity, Val]
