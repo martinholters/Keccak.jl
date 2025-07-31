@@ -49,12 +49,21 @@ with `state` and `k` replaced with the given values.
 update(sponge::S, state::T, k) where {R,T,S<:Sponge{R,T}} = S(sponge.transform, sponge.pad, state, k)
 
 """
+    lanetype(sponge::Sponge)
+
+Returns type of the sponge state data. For SIMD sponge, the eltype of the `SIMD.Vec` is
+returned. I.e. assuming the data is a `Tuple{Vararg{T}}`, then `T` is returned if
+`T<:Unsigned` and `eltype(T)` is returned if `T<:SIMD.Vec`.
+"""
+lanetype(::Sponge{R, Tuple{T, Vararg{T, K}}}) where {R, T <: Unsigned, K} = T
+lanetype(::Sponge{R, Tuple{T, Vararg{T, K}}}) where {R, N, ELT, T <: Vec{N, ELT}, K} = ELT
+
+"""
     rate(sponge::Sponge)
 
 Returns the rate (in bytes) of the given `sponge`.
 """
-rate(::Sponge{R,NTuple{K,T}}) where {R,K,ELT<:Unsigned,T<:Union{ELT,Vec{<:Any,ELT}}} =
-    R * sizeof(ELT)
+rate(sponge::Sponge{R}) where {R} = R * sizeof(lanetype(sponge))
 
 # Return a tuple `out` of length `blocklen`, such that
 # `out[destoffset+1:blocklen] == data[1+srcoffset:blocklen-destoffset+srcoffset]`
@@ -103,13 +112,11 @@ However, before the first `squeeze`, appropriate padding should be performed.
 
 If the sponge holds `SIMD.Vec`s, the same `data` is used for every data path.
 """
-function absorb(
-    sponge::Sponge{R,NTuple{K,T}},
-    data::AbsorbableData
-) where {R,K,ELT<:Unsigned,T<:Union{ELT,Vec{<:Any,ELT}}}
+function absorb(sponge::Sponge{R, NTuple{K, T}} where {T}, data::AbsorbableData) where {R, K}
     if data isa String
         data = codeunits(data)
     end
+    ELT = lanetype(sponge)
     st = sponge.state
     k = sponge.k
     n = 0
@@ -159,13 +166,14 @@ However, before the first `squeeze`, appropriate padding should be performed.
 
 """
 function absorb(
-    sponge::Sponge{R,NTuple{K,T}},
-    data::Vararg{AbsorbableData,N}
-) where {R,K,N,ELT<:Unsigned,T<:Vec{N,ELT}}
+        sponge::Sponge{R, NTuple{K, T}} where {T <: Vec{N}},
+        data::Vararg{AbsorbableData,N},
+    ) where {R, K, N}
     data = map(d -> d isa String ? codeunits(d) : d, data)
     if !allequal(map(length, data))
         throw(DimensionMismatch("data arguments provided to `absorb` have different length"))
     end
+    ELT = lanetype(sponge)
     st = sponge.state
     k = sponge.k
     n = 0
@@ -214,9 +222,10 @@ end
 
 # prevent ambiguity and solve be reinterpreting `Vec{1,T}` as `T`
 function absorb(
-    sponge::Sponge{R,NTuple{K,T}},
-    data::AbsorbableData
-) where {R,K,ELT<:Unsigned,T<:Vec{1,ELT}}
+        sponge::Sponge{R, NTuple{K, T}} where {T <: Vec{1}},
+        data::AbsorbableData,
+    ) where {R, K}
+    ELT = lanetype(sponge)
     sponge′ = @inline absorb(
         Sponge{R}(
             sponge.transform,
@@ -229,7 +238,7 @@ function absorb(
     return Sponge{R}(
         sponge′.transform,
         sponge′.pad,
-        reinterpret(NTuple{K,T}, sponge′.state),
+        reinterpret(typeof(sponge.state), sponge′.state),
         sponge′.k,
     )
 end
@@ -255,11 +264,11 @@ squeezed form the respective data paths.
 """
 function squeeze end
 
-function squeeze(sponge::Sponge{R,NTuple{K,T}}, len) where {R,K,T<:Unsigned}
-    J = sizeof(T)
+function squeeze(sponge::Sponge{R, NTuple{K, T}} where {T <: Unsigned}, len) where {R, K}
     data = Vector{UInt8}(undef, len)
     k = sponge.k
     st = sponge.state
+    J = sizeof(eltype(st))
     n = 1
     while n <= len
         curlen = min(len-n+1, rate(sponge)-k)
@@ -275,9 +284,9 @@ function squeeze(sponge::Sponge{R,NTuple{K,T}}, len) where {R,K,T<:Unsigned}
 end
 
 function squeeze(
-    sponge::Sponge{R,NTuple{K,T}},
-    len,
-) where {R,K,N,ELT<:Unsigned,T<:Vec{N,ELT}}
+        sponge::Sponge{R, NTuple{K, T}} where {T <: Vec{N, <:Unsigned}},
+        len,
+    ) where {R, K, N}
     data = ntuple(_ -> Vector{UInt8}(undef, len), Val(N))
     k = sponge.k
     st = sponge.state
@@ -300,10 +309,13 @@ function squeeze(
     return update(sponge, st, k), data
 end
 
-function squeeze(sponge::Sponge{R,NTuple{K,T}}, ::Val{len}) where {R,K,T<:Unsigned,len}
-    J = sizeof(T)
+function squeeze(
+        sponge::Sponge{R, NTuple{K, T}} where {T <: Unsigned},
+        ::Val{len},
+    ) where {R, K, len}
     k = sponge.k
     st = sponge.state
+    J = sizeof(eltype(st))
     if len+k <= rate(sponge)
         data = let k=k, st=reinterpret(NTuple{J*K,UInt8}, st)
             ntuple(i -> st[i+k], Val(len))
@@ -333,9 +345,9 @@ function squeeze(sponge::Sponge{R,NTuple{K,T}}, ::Val{len}) where {R,K,T<:Unsign
 end
 
 function squeeze(
-    sponge::Sponge{R,NTuple{K,T}},
-    ::Val{len}
-) where {R,K,N,ELT<:Unsigned,T<:Vec{N,ELT},len}
+        sponge::Sponge{R, NTuple{K, T}} where {K, T <: Vec{N, <:Unsigned}},
+        ::Val{len},
+    ) where {R, N, len}
     k = sponge.k
     st = sponge.state
     if len+k <= rate(sponge)

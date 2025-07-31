@@ -3,9 +3,19 @@ const TupleHash_N = Tuple(codeunits("TupleHash"))
 for d in [128, 256]
     R = (1600-2*d) ÷ 64
     cshake_spongefunc = Symbol("cshake_$(d)_sponge")
+    tuplehashhelperfunc = Symbol("tuplehashhelper_$(d)")
     tuplehashfunc = Symbol("tuplehash_$(d)")
     tuplehashxoffunc = Symbol("tuplehash_xof_$(d)")
     @eval begin
+        $(tuplehashhelperfunc)(data, ::Val{L}, S) where {L} =
+            $(tuplehashhelperfunc)(data, L, S)
+        function $(tuplehashhelperfunc)(data, len::Integer, S)
+            sponge = $(cshake_spongefunc)(TupleHash_N, S)
+            sponge = foldl(absorb_encoded_string, data, init = sponge)
+            sponge = absorb_right_encoded(sponge, 8 * len)
+            return pad(sponge)
+        end
+
         """
             $($(tuplehashfunc))(data, len, S=())
 
@@ -31,16 +41,8 @@ for d in [128, 256]
         $($(tuplehashfunc)(["abc", "def"], Val(12)))
         ```
         """
-        function $(tuplehashfunc)(
-            data,
-            len::Union{Val{L},Integer},
-            S::AbsorbableData = (),
-        ) where {L}
-            intlen = len isa Val ? L : len
-            sponge = $(cshake_spongefunc)(TupleHash_N, S)
-            sponge = foldl(absorb_encoded_string, data, init=sponge)
-            sponge = absorb_right_encoded(sponge, 8*intlen)
-            sponge = pad(sponge)
+        function $(tuplehashfunc)(data, len::Union{Val, Integer}, S::AbsorbableData = ())
+            sponge = $(tuplehashhelperfunc)(data, len, S)
             return squeeze(sponge, len)[2]
         end
 
@@ -56,12 +58,7 @@ for d in [128, 256]
 
         The returned sponge is ready to squeeze output of the desired length from.
         """
-        function $(tuplehashxoffunc)(data, S::AbsorbableData = ())
-            sponge = $(cshake_spongefunc)(TupleHash_N, S)
-            sponge = foldl(absorb_encoded_string, data, init=sponge)
-            sponge = absorb_right_encoded(sponge, 0)
-            return pad(sponge)
-        end
+        $(tuplehashxoffunc)(data, S::AbsorbableData = ()) = $(tuplehashhelperfunc)(data, 0, S)
 
         """
             $($(tuplehashxoffunc))(data, len, S=())

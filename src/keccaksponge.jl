@@ -45,9 +45,8 @@ struct KeccakPad
         return new(firstbyte)
     end
 end
-function (pad::KeccakPad)(
-    sponge::Sponge{R,NTuple{K,T}}
-) where {R,K,ELT<:Unsigned,T<:Union{ELT,Vec{<:Any,ELT}}}
+function (pad::KeccakPad)(sponge::Sponge{R, NTuple{K, T}} where {T}) where {R, K}
+    ELT = lanetype(sponge)
     J = sizeof(ELT)
     i, j = divrem(sponge.k, J)
     st = let st=sponge.state
