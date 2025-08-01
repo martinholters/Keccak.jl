@@ -580,6 +580,22 @@ end
         @test absorb(sponge, [data; UInt8(n)]) == Keccak.absorb_right_encoded(sponge, x)
         @test absorb(sponge, [UInt8(n); data]) == Keccak.absorb_left_encoded(sponge, x)
     end
+
+    for len1 in [0, 42], len2 in [0, 23, 133, 1234]
+        # start from a sponge that has already absorbed len1 bytes of data
+        sponge = absorb(shake_128_sponge(), rand(UInt8, len1))
+        data = rand(UInt8, len2)
+        # manually absorb bytepad(data, w) with w being the sponge rate
+        w = Keccak.rate(sponge)
+        ref_sponge = Keccak.absorb_left_encoded(sponge, w)
+        ref_sponge = absorb(ref_sponge, data)
+        ref_sponge = absorb(ref_sponge, zeros(UInt8, mod(-(len2 + 2), w))) # two extra bytes for left_encoded w
+        # now compare result to absorb_ratepadded
+        test_sponge = Keccak.absorb_ratepadded(sponge) do sp
+            return absorb(sp, data)
+        end
+        @test ref_sponge == test_sponge
+    end
 end
 
 @testset "cSHAKE" begin
