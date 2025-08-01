@@ -10,6 +10,7 @@ issue about it.
 Keccak.Sponge
 Keccak.AbsorbableData
 Keccak.update
+Keccak.lanetype
 Keccak.rate
 ```
 

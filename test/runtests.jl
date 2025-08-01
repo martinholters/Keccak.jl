@@ -1,7 +1,12 @@
+import Aqua
 using Keccak
 using OffsetArrays: Origin
 using SIMD: Vec
 using Test: @test, @test_throws, @testset
+
+@testset "Aqua.jl" begin
+    Aqua.test_all(Keccak)
+end
 
 @testset "Sponge" begin
     @testset "identity sponge" for intype in [identity, Tuple, String], maybe_val in [identity, Val]
@@ -328,6 +333,12 @@ end
     end
     sponge = Keccak.pad(sponge)
     @test Keccak.squeeze(sponge, length(len1600_ref))[2] == len1600_ref
+
+    # trying to create invalid KeccakPad
+    @test_throws ArgumentError KeccakPad(0x00)
+    @test_throws ArgumentError KeccakPad(0x80)
+    @test_throws ArgumentError KeccakPad(200)
+    @test_throws ArgumentError KeccakPad(-1)
 end
 
 @testset "SHA3-$d" for (d, shafunc, spongefunc, empty_ref, len1600_ref) in [
@@ -424,6 +435,14 @@ end
 
         @test squeeze(pad(sp), Val(d÷8))[2] == shafunc(input′...) == Tuple(shafunc(inp) for inp in input)
     end
+
+    # test error path for inputs of different size
+    # note: the implementation may conceivably be changed to allow this, but for now
+    # verify that it throws the correct error instead of producing bogus results
+    @test_throws DimensionMismatch shafunc(rand(UInt8, 23), rand(UInt8, 42))
+    @test_throws DimensionMismatch shafunc(rand(UInt8, 23), rand(UInt8, 42), rand(UInt8, 23))
+    @test_throws DimensionMismatch shafunc(rand(UInt8, 23), rand(UInt8, 23), rand(UInt8, 42))
+    @test_throws DimensionMismatch shafunc(rand(UInt8, 23), rand(UInt8, 42), rand(UInt8, 42))
 end
 
 @testset "SHAKE-$d" for (d, shakefunc, spongefunc, empty_ref, len1600_ref) in [
@@ -538,6 +557,45 @@ end
         end
         @test output == collect(shakefunc(input′..., len)) == [shakefunc(inp, len) for inp in input]
     end
+
+    # test error path for inputs of different size
+    # note: the implementation may conceivably be changed to allow this, but for now
+    # verify that it throws the correct error instead of producing bogus results
+    @test_throws DimensionMismatch shakefunc(rand(UInt8, 23), rand(UInt8, 42))
+    @test_throws DimensionMismatch shakefunc(rand(UInt8, 23), rand(UInt8, 42), rand(UInt8, 23))
+    @test_throws DimensionMismatch shakefunc(String(rand(UInt8, 23)), String(rand(UInt8, 23)), String(rand(UInt8, 42)))
+    @test_throws DimensionMismatch shakefunc(Tuple(rand(UInt8, 23)), Tuple(rand(UInt8, 42)), Tuple(rand(UInt8, 42)))
+end
+
+@testset "SP 800-185 helpers" begin
+    # test absorbing into a SHAKE-128 is equivalent
+    sponge = shake_128_sponge()
+    # only test data from the standard
+    @test absorb(sponge, (0x00, 0x01)) == Keccak.absorb_right_encoded(sponge, 0)
+    @test absorb(sponge, (0x01, 0x00)) == Keccak.absorb_left_encoded(sponge, 0)
+    for n in 1:8
+        # now use random data, hoping for no mis-interpretation of the standard
+        data = rand(UInt8, n)
+        x = sum(UInt64(data[i]) << (8 * (n - i)) for i in 1:n)
+        @test absorb(sponge, [data; UInt8(n)]) == Keccak.absorb_right_encoded(sponge, x)
+        @test absorb(sponge, [UInt8(n); data]) == Keccak.absorb_left_encoded(sponge, x)
+    end
+
+    for len1 in [0, 42], len2 in [0, 23, 133, 1234]
+        # start from a sponge that has already absorbed len1 bytes of data
+        sponge = absorb(shake_128_sponge(), rand(UInt8, len1))
+        data = rand(UInt8, len2)
+        # manually absorb bytepad(data, w) with w being the sponge rate
+        w = Keccak.rate(sponge)
+        ref_sponge = Keccak.absorb_left_encoded(sponge, w)
+        ref_sponge = absorb(ref_sponge, data)
+        ref_sponge = absorb(ref_sponge, zeros(UInt8, mod(-(len2 + 2), w))) # two extra bytes for left_encoded w
+        # now compare result to absorb_ratepadded
+        test_sponge = Keccak.absorb_ratepadded(sponge) do sp
+            return absorb(sp, data)
+        end
+        @test ref_sponge == test_sponge
+    end
 end
 
 @testset "cSHAKE" begin
@@ -639,6 +697,7 @@ end
 
     # sample #1
     expected = hex2bytes("CD83740BBD92CCC8CF032B1481A0F4460E7CA9DD12B08A0C4031178BACD6EC35")
+    @test squeeze(pad(absorb(kmac_128_sponge(0x40:0x5f), 0x00:0x03)), 32)[2] == expected
     @test squeeze(pad(absorb(kmac_128_sponge(0x40:0x5f, 0), 0x00:0x03)), 32)[2] == expected
     @test squeeze(kmac_xof_128(0x40:0x5f, 0x00:0x03), Val(32))[2] == Tuple(expected)
     @test kmac_xof_128(0x40:0x5f, 0x00:0x03, 32, "") == expected
@@ -646,6 +705,7 @@ end
 
     # sample #2
     expected = hex2bytes("31A44527B4ED9F5C6101D11DE6D26F0620AA5C341DEF41299657FE9DF1A3B16C")
+    @test squeeze(pad(absorb(kmac_128_sponge(0x40:0x5f, "My Tagged Application"), 0x00:0x03)), 32)[2] == expected
     @test squeeze(pad(absorb(kmac_128_sponge(0x40:0x5f, 0, "My Tagged Application"), 0x00:0x03)), 32)[2] == expected
     @test squeeze(kmac_xof_128(0x40:0x5f, Tuple(0x00:0x03), "My Tagged Application"), Val(32))[2] == Tuple(expected)
     @test kmac_xof_128(0x40:0x5f, 0x00:0x03, 32, codeunits("My Tagged Application")) == expected
@@ -660,13 +720,14 @@ end
 
     # sample #4
     expected = hex2bytes("1755133F1534752AAD0748F2C706FB5C784512CAB835CD15676B16C0C6647FA96FAA7AF634A0BF8FF6DF39374FA00FAD9A39E322A7C92065A64EB1FB0801EB2B")
-    @test squeeze(pad(absorb(kmac_256_sponge(0x40:0x5f, 0, "My Tagged Application"), 0x00:0x03)), 64)[2] == expected
+    @test squeeze(pad(absorb(kmac_256_sponge(0x40:0x5f, "My Tagged Application"), 0x00:0x03)), 64)[2] == expected
     @test squeeze(kmac_xof_256(0x40:0x5f, String(0x00:0x03), Tuple(codeunits("My Tagged Application"))), Val(64))[2] == Tuple(expected)
     @test kmac_xof_256(0x40:0x5f, 0x00:0x03, 64, codeunits("My Tagged Application")) == expected
     @test kmac_xof_256(String(0x40:0x5f), Tuple(0x00:0x03), Val(64), "My Tagged Application") == Tuple(expected)
 
     # sample #5
     expected = hex2bytes("FF7B171F1E8A2B24683EED37830EE797538BA8DC563F6DA1E667391A75EDC02CA633079F81CE12A25F45615EC89972031D18337331D24CEB8F8CA8E6A19FD98B")
+    @test squeeze(pad(absorb(kmac_256_sponge(0x40:0x5f), 0x00:0xc7)), 64)[2] == expected
     @test squeeze(pad(absorb(kmac_256_sponge(0x40:0x5f, 0, ""), 0x00:0xc7)), 64)[2] == expected
     @test squeeze(kmac_xof_256(0x40:0x5f, String(0x00:0xc7)), Val(64))[2] == Tuple(expected)
     @test kmac_xof_256(0x40:0x5f, 0x00:0xc7, 64, UInt8[]) == expected

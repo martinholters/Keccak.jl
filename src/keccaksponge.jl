@@ -39,15 +39,14 @@ be `0b00000110 == 0x06`, and the corresponding padding function would be instant
 struct KeccakPad
     firstbyte::UInt8
     function KeccakPad(firstbyte=0x01)
-        if !(0x01 <= firstbyte <= 0xf7)
+        if !(0x01 <= firstbyte <= 0x7f)
             throw(ArgumentError("invalid first byte of padding"))
         end
         return new(firstbyte)
     end
 end
-function (pad::KeccakPad)(
-    sponge::Sponge{R,NTuple{K,T}}
-) where {R,K,ELT<:Unsigned,T<:Union{ELT,Vec{<:Any,ELT}}}
+function (pad::KeccakPad)(sponge::Sponge{R, NTuple{K, T}} where {T}) where {R, K}
+    ELT = lanetype(sponge)
     J = sizeof(ELT)
     i, j = divrem(sponge.k, J)
     st = let st=sponge.state

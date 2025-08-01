@@ -5,18 +5,34 @@ for d in [128, 256]
     shakefunc = Symbol("shake_$(d)")
     cshake_spongefunc = Symbol("cshake_$(d)_sponge")
     parallelhashhelper = Symbol("_parallelhash_$(d)")
-    parallelhashhelperthreaded = Symbol("_parallelhash_$(d)_threaded")
     parallelhashfunc = Symbol("parallelhash_$(d)")
     parallelhashxoffunc = Symbol("parallelhash_xof_$(d)")
     @eval begin
-        $(parallelhashhelper)(data::String, blocksize, len, S::AbsorbableData) =
-            $(parallelhashhelper)(codeunits(data), blocksize, len, S)
         function $(parallelhashhelper)(
-            data::AbstractVector{UInt8},
-            blocksize::Integer,
-            len::Integer,
-            S::AbsorbableData,
-        )
+                data,
+                blocksize,
+                ::Val{len},
+                S::AbsorbableData,
+                threaded::Val,
+            ) where {len}
+            return $(parallelhashhelper)(data, blocksize, len, S, threaded)
+        end
+        function $(parallelhashhelper)(
+                data::String,
+                blocksize,
+                len::Integer,
+                S::AbsorbableData,
+                threaded::Val,
+            )
+            return $(parallelhashhelper)(codeunits(data), blocksize, len, S, threaded)
+        end
+        function $(parallelhashhelper)(
+                data::AbstractVector{UInt8},
+                blocksize::Integer,
+                len::Integer,
+                S::AbsorbableData,
+                ::Val{false},
+            )
             sponge = $(cshake_spongefunc)(ParallelHash_N, S)
             sponge = absorb_left_encoded(sponge, blocksize)
             n = div(absorblength(data), blocksize, RoundUp)
@@ -62,14 +78,13 @@ for d in [128, 256]
             return sponge
         end
 
-        $(parallelhashhelperthreaded)(data::String, blocksize, len, S::AbsorbableData) =
-            $(parallelhashhelperthreaded)(codeunits(data), blocksize, len, S)
-        function $(parallelhashhelperthreaded)(
-            data::AbstractVector{UInt8},
-            blocksize::Integer,
-            len::Integer,
-            S::AbsorbableData,
-        )
+        function $(parallelhashhelper)(
+                data::AbstractVector{UInt8},
+                blocksize::Integer,
+                len::Integer,
+                S::AbsorbableData,
+                ::Val{true},
+            )
             sponge = $(cshake_spongefunc)(ParallelHash_N, S)
             sponge = absorb_left_encoded(sponge, blocksize)
             n = div(absorblength(data), blocksize, RoundUp)
@@ -132,15 +147,15 @@ for d in [128, 256]
         `Vector{UInt8}` otherwise.
         """
         function $(parallelhashfunc)(
-            data::Union{AbstractVector{UInt8},String},
-            blocksize::Integer,
-            len::Union{Val{L},Integer},
-            S::AbsorbableData = ();
-            threaded = true,
-        ) where {L}
+                data::Union{AbstractVector{UInt8}, String},
+                blocksize::Integer,
+                len::Union{Val, Integer},
+                S::AbsorbableData = ();
+                threaded = true,
+            )
             sponge = threaded ?
-                $(parallelhashhelperthreaded)(data, blocksize, len isa Val ? L : len, S) :
-                $(parallelhashhelper)(data, blocksize, len isa Val ? L : len, S)
+                $(parallelhashhelper)(data, blocksize, len, S, Val(true)) :
+                $(parallelhashhelper)(data, blocksize, len, S, Val(false))
             return squeeze(sponge, len)[2]
         end
 
@@ -165,9 +180,9 @@ for d in [128, 256]
             threaded = true,
         )
             if threaded
-                return $(parallelhashhelperthreaded)(data, blocksize, 0, S)
+                return $(parallelhashhelper)(data, blocksize, 0, S, Val(true))
             else
-                return $(parallelhashhelper)(data, blocksize, 0, S)
+                return $(parallelhashhelper)(data, blocksize, 0, S, Val(false))
             end
         end
 

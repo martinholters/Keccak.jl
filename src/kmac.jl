@@ -47,6 +47,8 @@ for d in [128, 256]
                 sponge.k,
             )
         end
+        $(kmac_spongefunc)(K::AbsorbableData, ::Val{len}, S::AbsorbableData = ()) where {len} =
+            $(kmac_spongefunc)(K, len, S)
         $(kmac_spongefunc)(K::AbsorbableData, S::AbsorbableData = ()) =
             $(kmac_spongefunc)(K, 0, S)
 
@@ -65,13 +67,12 @@ for d in [128, 256]
             See `$($(kmacxoffunc))` for an alternative.
         """
         function $(kmacfunc)(
-            K::AbsorbableData,
-            data::AbsorbableData,
-            len::Union{Val{L},Integer},
-            S::AbsorbableData = (),
-        ) where {L}
-            intlen = len isa Val ? L : len
-            sponge = $(kmac_spongefunc)(K, intlen, S)
+                K::AbsorbableData,
+                data::AbsorbableData,
+                len::Union{Val, Integer},
+                S::AbsorbableData = (),
+            )
+            sponge = $(kmac_spongefunc)(K, len, S)
             sponge = absorb(sponge, data)
             sponge = pad(sponge)
             return squeeze(sponge, len)[2]
